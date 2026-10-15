@@ -1,0 +1,143 @@
+{
+ "classes": [
+  {
+   "id": "warrior",
+   "name": "Warrior",
+   "wow_class_id": 1,
+   "icon": "Icon_Warrior",
+   "starting_spell": "cleave",
+   "spell_pool": [
+    "cleave"
+   ]
+  },
+  {
+   "id": "rogue",
+   "name": "Rogue",
+   "wow_class_id": 4,
+   "icon": "Icon_Rogue",
+   "starting_spell": "stab",
+   "spell_pool": [
+    "stab"
+   ]
+  }
+ ],
+ "zones": [
+  {
+   "id": "meadow",
+   "name": "Meadow"
+  },
+  {
+   "id": "cave",
+   "name": "Cave"
+  }
+ ],
+ "talent_trees": [
+  {
+   "name": "A1",
+   "icon": "Tree_A1",
+   "talents": [
+    {
+     "id": "t1",
+     "name": "Talent One",
+     "icon": "Talent_1",
+     "ranks": 5
+    }
+   ]
+  },
+  {
+   "name": "A2",
+   "icon": "Tree_A2",
+   "talents": []
+  },
+  {
+   "name": "A3",
+   "icon": "Tree_A3",
+   "talents": []
+  },
+  {
+   "name": "B1",
+   "icon": "Tree_B1",
+   "talents": []
+  },
+  {
+   "name": "B2",
+   "icon": "Tree_B2",
+   "talents": []
+  },
+  {
+   "name": "B3",
+   "icon": "Tree_B3",
+   "talents": []
+  }
+ ],
+ "abilities": [
+  {
+   "id": "cleave",
+   "name": "Cleave",
+   "icon": "Ability_Cleave"
+  },
+  {
+   "id": "stab",
+   "name": "Stab",
+   "icon": "Ability_Stab"
+  }
+ ],
+ "jewels": [
+  {
+   "id": "ring",
+   "name": "Ring",
+   "icon": "Icon_Ring"
+  }
+ ],
+ "amulets": [
+  {
+   "id": "amulet",
+   "name": "Amulet",
+   "icon": "Icon_Amulet"
+  }
+ ],
+ "achievements": [
+  {
+   "key": "feat:odds",
+   "name": "Against the Odds",
+   "description": "Win at full reward.",
+   "icon": "Icon_Odds",
+   "group": "Feats"
+  },
+  {
+   "key": "class:warrior",
+   "name": "Warrior Victorious",
+   "description": "Win with a Warrior.",
+   "icon": "Icon_Warrior",
+   "group": "Classes"
+  },
+  {
+   "key": "class:rogue",
+   "name": "Rogue Victorious",
+   "description": "Win with a Rogue.",
+   "icon": "Icon_Rogue",
+   "group": "Classes"
+  },
+  {
+   "key": "zone:meadow",
+   "name": "Meadow",
+   "description": "Win in the Meadow.",
+   "icon": "Icon_Map",
+   "group": "Zones"
+  },
+  {
+   "key": "zone:cave",
+   "name": "Cave",
+   "description": "Win in the Cave.",
+   "icon": "Icon_Map",
+   "group": "Zones"
+  }
+ ],
+ "text_en": {
+  "set.warrior.1": "Valor",
+  "noun.plate.0": "Helm",
+  "weapon.warrior.0.4": "Big Sword",
+  "weapon.rogue.0.0": "Dagger",
+  "weapon.rogue.1.0": "Offhand Dagger"
+ }
+}

@@ -1,0 +1,14 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Generated from the user's own game files; never commit (see README)
+/data/
+*.sav
+!/tests/fixtures/*.sav
+
+# OS
+.DS_Store
+
+# Export output
+/build/
