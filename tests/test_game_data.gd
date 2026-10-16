@@ -80,12 +80,20 @@ func test_real_generated_data_if_present() -> void:
 	assert_eq(real.item_name(101010), "Valor Helm")
 	assert_eq(real.item_name(104940), "Kingsfall")
 	assert_eq(real.achievements.size(), 66)
-	# every real tree fits the talent budget, so "max tree" fills it completely on a fresh class
+	# every real tree fits the talent budget, so "max tree" fills it completely on a fresh class,
+	# learning one talent of each exclusive pair (the Feral capstones)
+	var exclusive := 0
 	for tree in real.talent_trees:
 		var total := 0
+		var learned: Array[String] = []
 		for t: Dictionary in tree["talents"]:
+			if t["excludes"].any(func(other: String) -> bool: return other in learned):
+				exclusive += 1
+				continue
+			learned.append(t["id"])
 			total += int(t["ranks"])
 		var p := SaveProgress.from_text("")
 		p.max_tree(1, tree["talents"])
 		assert_eq(p.talent_points_spent(1), total, tree["name"])
 		assert_true(total <= SaveProgress.MAX_TALENT_POINTS, "%s has %d points" % [tree["name"], total])
+	assert_eq(exclusive, 1, "one capstone pair")

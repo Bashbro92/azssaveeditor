@@ -37,7 +37,8 @@ func test_sample_reseals_byte_for_byte() -> void:
 
 
 ## Same totals as the generated "100%" save that was verified in game (2026-10-15), except that
-## achievements now cover all 66 keys found in the exe (the verified save had 39 of them).
+## achievements now cover all 66 keys found in the exe (the verified save had 39 of them), and
+## game 0.94.0 added the druid spell Shred and with it one legendary codex entry (140 -> 141).
 func test_fill_all_matches_verified_save() -> void:
 	if not FileAccess.file_exists(GameData.DEFAULT_PATH):
 		print("  (test_fill_all_matches_verified_save: no %s)" % GameData.DEFAULT_PATH)
@@ -46,7 +47,7 @@ func test_fill_all_matches_verified_save() -> void:
 	p.fill_all(GameData.load_file().value, 0)
 	var doc := SaveDoc.parse(p.to_text())
 	assert_eq(p.item_count(), 415, "items")
-	assert_eq(doc.first("seen")[1].split(",").size(), 140, "codex entries")
+	assert_eq(doc.first("seen")[1].split(",").size(), 141, "codex entries")
 	assert_eq(p.achievements().size(), 66, "achievements")
 	assert_eq(doc.records_of("beat").size(), 81, "zone wins")
 	assert_eq(p.hero_classes().size(), 9, "heroes")
