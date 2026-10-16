@@ -69,7 +69,7 @@ func _button(text: String, action: Callable) -> Button:
 
 func _configure_from_settings() -> void:
 	if settings.exe_path.is_empty():
-		_show_status("Choose your AzerothSurvivors.exe with “Game files…”.")
+		_show_status("Choose the game (AzerothSurvivors.exe or the Linux AzerothSurvivors) with “Game files…”.")
 		_update_buttons()
 		return
 	var configured := session.configure(settings.exe_path, settings.data_dir)
@@ -78,7 +78,8 @@ func _configure_from_settings() -> void:
 
 
 func _choose_exe() -> void:
-	_file_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.exe ; Game executable"], "Select AzerothSurvivors.exe",
+	var filters := PackedStringArray(["*.exe, AzerothSurvivors ; Game executable (Windows or Linux)", "* ; All files"])
+	_file_dialog(FileDialog.FILE_MODE_OPEN_FILE, filters, "Select the game executable",
 			func(path: String) -> void:
 				settings.exe_path = path
 				settings.data_dir = path.get_base_dir().path_join("Data")

@@ -1,5 +1,6 @@
 extends TestCase
-## End-to-end checks against a real save and the real key. Needs the game exe: set AZS_EXE.
+## End-to-end checks against a real save and the real key. Needs the game executable (Windows or
+## Linux build): set AZS_EXE.
 
 const FIXTURE := "res://tests/fixtures/sample.sav"
 
@@ -15,13 +16,14 @@ func before_all() -> void:
 		skip("set AZS_EXE to the game exe to run")
 		return
 	var bytes := KeyFinder.read_exe(exe)
-	var found := KeyFinder.find_key(bytes.value) if bytes.ok else bytes
+	var image := ExeImage.open(bytes.value) if bytes.ok else bytes
+	var found := KeyFinder.find_key(bytes.value, image.value) if image.ok else image
 	if not found.ok:
 		skip(found.error)
 		return
 	key = found.value
 	version = VersionFinder.find_version(bytes.value)
-	game = GameData.from_exe(bytes.value).value
+	game = GameData.from_exe(image.value).value
 	sealed = FileAccess.get_file_as_string(FIXTURE)
 
 

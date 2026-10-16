@@ -2,7 +2,7 @@ extends SceneTree
 ## Opens a save in the real main window and writes a screenshot of every tab, for reviewing the UI.
 ## Needs a display (not --headless); the user's saved settings are not changed.
 ##
-##   godot --script tools/capture_screens.gd -- <AzerothSurvivors.exe> <save.sav> <out dir>
+##   godot --script tools/capture_screens.gd -- <game executable> <save.sav> <out dir>
 
 const MAIN_SCENE := "res://src/ui/main.tscn"
 const SETTLE_FRAMES := 10

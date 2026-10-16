@@ -1,5 +1,6 @@
 extends TestCase
-## Game data extracted from the real exe. Needs the game exe: set AZS_EXE.
+## Game data extracted from the real game. Needs the game executable (Windows or Linux build): set
+## AZS_EXE.
 
 var game: GameData
 
@@ -10,7 +11,8 @@ func before_all() -> void:
 		skip("set AZS_EXE to the game exe to run")
 		return
 	var bytes := KeyFinder.read_exe(exe)
-	var loaded := GameData.from_exe(bytes.value) if bytes.ok else bytes
+	var image := ExeImage.open(bytes.value) if bytes.ok else bytes
+	var loaded := GameData.from_exe(image.value) if image.ok else image
 	if not loaded.ok:
 		skip(loaded.error)
 		return
@@ -28,6 +30,17 @@ func test_tables() -> void:
 	assert_eq(game.class_by_wow_id(11)["spell_pool"][-1], "shred")
 	assert_eq(game.item_name(101010), "Valor Helm")
 	assert_eq(game.item_name(104940), "Kingsfall")
+
+
+func test_achievements_come_with_icons() -> void:
+	var by_key := {}
+	for a in game.achievements:
+		by_key[a["key"]] = a
+		assert_true(a["icon"] != "" and a["description"] != "", "%s is complete" % a["key"])
+	assert_eq(by_key["talents:1"]["icon"], "INV_Misc_Book_11")
+	assert_eq(by_key["count:kills100k"]["icon"], "INV_Sword_39", "a literal the linker shares")
+	assert_eq(by_key["pieces:100"]["description"], "Collect 100 pieces of gear, of any class.")
+	assert_eq(by_key["count:bosses100"]["description"], "Slay 100 bosses.")
 
 
 func test_feral_capstones_exclude_each_other() -> void:

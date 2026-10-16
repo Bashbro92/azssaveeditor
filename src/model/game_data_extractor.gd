@@ -1,7 +1,7 @@
 class_name GameDataExtractor
 extends RefCounted
-## Reads the game content the editor needs straight from the user's AzerothSurvivors.exe, in the
-## shape GameData.from_dict takes.
+## Reads the game content the editor needs straight from the user's game executable (Windows or
+## Linux build), in the shape GameData.from_dict takes.
 ##
 ## Tables are found by content (a known string in their first row), not by fixed offsets, so this
 ## survives rebuilds as long as the row layouts don't change. Each row is a run of static Rust
@@ -29,22 +29,18 @@ const PIECES_TEXT := "Collect {n} pieces of gear, of any class."
 const TALENT_TEXTS: Array[String] = [
 	"Earn all {n} talent points with one class.", "Earn all {n} talent points with every class.",
 ]
+## The achievement builder's first literals: the code that loads them builds every fixed achievement.
 const ACHIEVEMENTS_START := "Fully TalentedEarn all {n}"
-const ACHIEVEMENTS_END := "INV_BannerPVP_01"
+const ACHIEVEMENTS_CODE_SPAN := 0x8000  # the builder is ~14 KB of code
 const ZONE_ICON := "INV_Misc_Map_01"
-## Stands for the binary bytes between the achievement builder's literals.
-const GAP := "\u0001"
 
 var _exe: ExeImage
 
 
 ## Everything GameData needs, or a failure naming the table that wasn't found.
-static func extract(exe: PackedByteArray) -> Result:
-	var opened := ExeImage.open(exe)
-	if not opened.ok:
-		return opened
+static func extract(exe: ExeImage) -> Result:
 	var extractor := GameDataExtractor.new()
-	extractor._exe = opened.value
+	extractor._exe = exe
 	return extractor._extract_all()
 
 
@@ -159,18 +155,21 @@ func _texts() -> Dictionary:
 	return parsed if parsed is Dictionary else {}
 
 
+## The fixed achievements from the strings their builder loads, plus the templated ones.
 func _achievements(text: Dictionary, classes: Array, zones: Array) -> Array:
-	var start := _exe.find(ACHIEVEMENTS_START.to_ascii_buffer())
-	var end := _exe.find(ACHIEVEMENTS_END.to_ascii_buffer(), maxi(start, 0))
 	var keys: Array = text.keys()
 	var first := keys.find("Fully Talented")
 	var last := keys.find("Jan")
-	if start == -1 or end == -1 or first == -1 or last <= first:
+	var start := _exe.find(ACHIEVEMENTS_START.to_ascii_buffer())
+	if start == -1 or first == -1 or last <= first:
+		return []
+	var refs := _exe.lea_refs(start)
+	if refs.is_empty():
 		return []
 	var block: Array[String] = []
 	block.assign(keys.slice(first, last))
 	block.append_array(TALENT_TEXTS)
-	var fixed := parse_achievement_run(literal_run(_exe.bytes.slice(start, end + ACHIEVEMENTS_END.length())), block)
+	var fixed := assemble_achievements(_exe.lea_strings(refs[0], ACHIEVEMENTS_CODE_SPAN), block)
 	return fixed + templated_achievements(classes, zones)
 
 
@@ -192,89 +191,58 @@ static func link_exclusions(tree: Array) -> Array:
 	return tree
 
 
-## Raw bytes as text, every run of non-printable bytes turned into one GAP.
-static func literal_run(raw: PackedByteArray) -> String:
-	var out := PackedByteArray()
-	for byte in raw:
-		if byte >= 0x20 and byte <= 0x7E:
-			out.append(byte)
-		elif out.is_empty() or out[-1] != GAP.unicode_at(0):
-			out.append(GAP.unicode_at(0))
-	return out.get_string_from_ascii()
-
-
-## Splits the achievement builder's concatenated literals (name, description, key, icon, …; GAP
-## marks binary bytes) into achievements, using `block` (the known names and descriptions) to find
-## the boundaries. Names are the block entries that don't end in a full stop.
-static func parse_achievement_run(run: String, block: Array[String]) -> Array:
-	var by_first := {}  # first character -> known texts, longest first
-	var known := block.duplicate()
-	known.sort_custom(func(a: String, b: String) -> bool: return a.length() > b.length())
-	for k: String in known:
-		if k.length() > 3:
-			by_first.get_or_add(k[0], []).append(k)
-	var key_pattern := RegEx.create_from_string("^(feat|count):[a-z0-9]+")
-
-	var tokens := []  # [kind, value]: text, key or icon
-	var icon := ""
-	var i := 0
-	while i < run.length():
-		var found := ""
-		for k: String in by_first.get(run[i], []):
-			if run.substr(i, k.length()) == k:
-				found = k
-				break
-		var key: RegExMatch = key_pattern.search(run.substr(i, 40)) if run[i] in ["f", "c"] else null
-		if found or key:
-			if icon:
-				tokens.append(["icon", icon])
-				icon = ""
-			if key and (not found or key.get_string().length() >= found.length()):
-				tokens.append(["key", key.get_string()])
-				i += key.get_string().length()
-			else:
-				tokens.append(["text", found])
-				i += found.length()
-		elif run[i] == GAP:
-			if icon:
-				tokens.append(["icon", icon])
-				icon = ""
-			i += 1
+## Builds the fixed achievements from the strings their builder loads, in code order. The builder
+## loads each achievement's name, then its description, and its key and icon either right after or
+## in a later run of (key, icon) pairs; so names open achievements in order, a description belongs
+## to the latest name, and keys and icons go to the first achievement still without one. `block`
+## holds every fixed achievement's name and description (names don't end in a full stop); a name
+## seen again and anything left over after the builder are ignored.
+static func assemble_achievements(strings: PackedStringArray, block: Array[String]) -> Array:
+	var names := {}
+	var descriptions := {}
+	for entry in block:
+		if entry.ends_with("."):
+			descriptions[entry] = true
 		else:
-			icon += run[i]
-			i += 1
-	if icon:
-		tokens.append(["icon", icon])
-
+			names[entry] = true
+	var key_pattern := RegEx.create_from_string("^(feat|count):[a-z0-9]+$")
+	var icon_pattern := RegEx.create_from_string("^[A-Z][A-Za-z0-9]*_[A-Za-z0-9_]+$")
 	var out := []
-	var current: Variant = null
-	for token: Array in tokens:
-		var kind: String = token[0]
-		var value: String = token[1]
-		if kind == "text" and not value.ends_with("."):
-			current = {"name": value}
-			out.append(current)
-		elif current == null:
+	for s in strings:
+		if names.has(s):
+			names.erase(s)
+			out.append({"name": s})
+		elif out.is_empty():
 			continue
-		elif kind == "text":
-			current["description"] = value
-		else:
-			current[kind] = value
-	var previous_icon := ""
-	var result := []
+		elif descriptions.has(s):
+			out[-1].get_or_add("description", s)
+		elif key_pattern.search(s):
+			var owner: Variant = _first_without(out, "key", true)
+			if owner:
+				owner["key"] = s
+		elif icon_pattern.search(s):
+			var owner: Variant = _first_without(out, "icon", false)
+			if owner:
+				owner["icon"] = s
 	for a: Dictionary in out:
-		a.get_or_add("icon", previous_icon)  # the builder reuses the previous icon when none is given
-		previous_icon = a["icon"]
 		a.get_or_add("key", CODE_KEYS.get(a["name"], ""))
-		var description: String = a.get("description", "")
-		a["description"] = description.replace("{n}", str(SaveProgress.MAX_TALENT_POINTS))
+		a.get_or_add("icon", "")
 		var key: String = a["key"]
+		var description: String = a.get("description", "")
 		if key.begins_with("pieces:") and key != "pieces:all":
-			a["description"] = PIECES_TEXT.replace("{n}", key.get_slice(":", 1))
-		if key:
-			a["group"] = achievement_group(key)
-			result.append(a)
-	return result
+			description = PIECES_TEXT
+		a["description"] = description.replace("{n}", key.get_slice(":", 1) if key.begins_with("pieces:") \
+				else str(SaveProgress.MAX_TALENT_POINTS))
+		a["group"] = achievement_group(key)
+	return out.filter(func(a: Dictionary) -> bool: return a["key"] != "")
+
+
+## The first achievement without `field` (skipping those whose key is built in code, for keys).
+static func _first_without(achievements: Array, field: String, skip_code_keys: bool) -> Variant:
+	for a: Dictionary in achievements:
+		if not a.has(field) and not (skip_code_keys and CODE_KEYS.has(a["name"])):
+			return a
+	return null
 
 
 ## The per-class and per-zone achievements the game generates from templates.

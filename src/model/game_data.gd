@@ -2,7 +2,7 @@ class_name GameData
 extends RefCounted
 ## Game content the editor needs: classes, zones, talent trees, abilities, jewelry and gear naming.
 ##
-## Read from the user's own AzerothSurvivors.exe by GameDataExtractor; tests load the same shape
+## Read from the user's game executable by GameDataExtractor; tests load the same shape
 ## from a JSON fixture.
 
 const TREES_PER_CLASS := 3
@@ -27,8 +27,8 @@ var achievements: Array[Dictionary] = []  # key, name, description, icon, group
 var text: Dictionary = {}       # English localisation, key -> string
 
 
-## Game data read from the bytes of the user's AzerothSurvivors.exe.
-static func from_exe(exe: PackedByteArray) -> Result:
+## Game data read from the user's game executable.
+static func from_exe(exe: ExeImage) -> Result:
 	var extracted := GameDataExtractor.extract(exe)
 	return from_dict(extracted.value) if extracted.ok else extracted
 

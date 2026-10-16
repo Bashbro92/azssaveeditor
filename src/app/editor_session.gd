@@ -20,17 +20,18 @@ var save_path := ""
 ## Reads the key, version and game data from the exe and opens the Data folder's patch.MPQ for
 ## icons. Icons are optional.
 func configure(exe_path: String, data_dir: String) -> Result:
-	var exe := KeyFinder.read_exe(exe_path)
+	var bytes := KeyFinder.read_exe(exe_path)
+	var exe := ExeImage.open(bytes.value) if bytes.ok else bytes
 	if not exe.ok:
 		return exe
-	var found := KeyFinder.find_key(exe.value)
+	var found := KeyFinder.find_key(bytes.value, exe.value)
 	if not found.ok:
 		return found
 	var loaded := GameData.from_exe(exe.value)
 	if not loaded.ok:
 		return loaded
 	key = found.value
-	game_version = VersionFinder.find_version(exe.value)
+	game_version = VersionFinder.find_version(bytes.value)
 	game = loaded.value
 	var archive := MpqArchive.open(data_dir.path_join("patch.MPQ"))
 	icons = IconCache.new(archive.value if archive.ok else null)
