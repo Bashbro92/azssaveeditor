@@ -2,15 +2,21 @@
 
 This is a save editor for **Azeroth Survivors**, a fan-made, survivors-style game set in vanilla WoW. It uses Godot 4.7 with the Compatibility renderer and is written in GDScript.
 
-**Latest tested game version: 0.94.1.** The top bar shows the version of the exe you chose.
+**Latest tested game version: 0.94.1**, Windows and Linux builds. The top bar shows the version of the game you chose.
 
-You need your own copy of the game. The editor reads the save key, the game version and the game data (classes, spells, talents, codex, achievements) from your `AzerothSurvivors.exe`, and icons from your `Data/patch.MPQ`, at run time. Nothing from the game is bundled. After a game update, new spells, talents and codex entries show up as soon as you point the editor at the new exe, as long as the update keeps the game's table layouts. If it doesn't, loading the game files fails with a message naming the table it couldn't find.
+You need your own copy of the game. The editor works with either build of the game:
+- **Windows:** `AzerothSurvivors.exe`;
+- **Linux:** the `AzerothSurvivors` executable.
+
+Saves are the same on both, so you can edit a save from either build with either one. The editor runs on Windows, macOS and Linux, whichever build of the game you have.
+
+The editor reads the save key, the game version and the game data (classes, spells, talents, codex, achievements) from the game executable, and icons from the `Data/patch.MPQ` next to it, at run time. Nothing from the game is bundled. After a game update, new spells, talents and codex entries show up as soon as you point the editor at the new executable, as long as the update keeps the game's table layouts. If it doesn't, loading the game files fails with a message naming the table it couldn't find.
 
 This is an unofficial tool for your own single-player saves. It bypasses the game's tamper check, so please don't share edited saves without the game developer's OK.
 
 ## Usage
 
-1. Run the editor, click **Game files…** and select your `AzerothSurvivors.exe`. The `Data` folder next to it is used for icons. Reading the exe takes a second or two.
+1. Run the editor, click **Game files…** and select the game executable: `AzerothSurvivors.exe` (Windows build) or `AzerothSurvivors` (Linux build). The `Data` folder next to it is used for icons. Reading the game takes a second or two.
 2. **Open save…** loads a `.sav` exported from the game (Options → Export Save).
 3. Edit in the tabs, or use **Fill 100%** to unlock everything:
    - **Overview:** heroes and lifetime stats;
@@ -39,7 +45,13 @@ godot --headless --export-release "Linux" "build/linux/azs-save-editor.x86_64"
 
 ## Development
 
-Game data comes from the exe through `GameDataExtractor` (`src/model/game_data_extractor.gd`). The game is a Rust program. Its content tables are rows of static values in `.rdata`: strings and lists are (pointer, length) pairs. The extractor finds each table by a string in its first row and reads the rows from there; `ExeImage` (`src/codec/exe_image.gd`) resolves the pointers. If a game update changes a row layout, adjust the row sizes and field offsets at the top of the extractor.
+Game data comes from the game executable through `GameDataExtractor` (`src/model/game_data_extractor.gd`). The game is a Rust program. Its content tables are rows of static values: strings and lists are (pointer, length) pairs. The extractor finds each table by a string in its first row and reads the rows from there. The fixed achievements are read from the code that builds them: each `lea` of a string literal, followed by its length.
+
+`ExeImage` (`src/codec/exe_image.gd`) reads both builds:
+- **Windows (PE32+):** pointers are stored in place, in `.rdata`.
+- **Linux (ELF64, position-independent):** the pointers in `.data.rel.ro` are zero in the file. Opening the executable fills them in from the `R_X86_64_RELATIVE` relocations, so the extractor reads both builds the same way.
+
+The save key is HMAC's inner-pad block. Windows keeps it in one piece; Linux keeps it as four 16-byte constants, which `KeyFinder` collects from the `movaps` loads that follow the first one. If a game update changes a row layout, adjust the row sizes and field offsets at the top of the extractor.
 
 Tests (macOS: `godot` = `/Applications/Godot.app/Contents/MacOS/Godot`):
 
@@ -49,24 +61,24 @@ godot --headless --script tests/run_tests.gd
 ```
 
 Some tests need the real game files and only run when these are set:
-- `AZS_EXE=/path/to/AzerothSurvivors.exe`: game data extracted from the real exe, and sample-save tests with the real key;
+- `AZS_EXE=/path/to/AzerothSurvivors.exe` or `/path/to/AzerothSurvivors` (Linux build): game data extracted from the real game, and sample-save tests with the real key. Run the suite once per build;
 - `AZS_DATA=/path/to/Data`: MPQ and icon tests.
 
 To check icon decoding by eye, render every icon the game data references into one sheet:
 
 ```sh
-godot --headless --script tools/render_icon_sheet.gd -- /path/to/AzerothSurvivors.exe icons.png
+godot --headless --script tools/render_icon_sheet.gd -- /path/to/AzerothSurvivors.exe icons.png   # or the Linux executable
 ```
 
 To review the UI, take a screenshot of every tab with a save loaded. This needs a display, so don't pass `--headless`:
 
 ```sh
-godot --script tools/capture_screens.gd -- /path/to/AzerothSurvivors.exe tests/fixtures/sample.sav screens/
+godot --script tools/capture_screens.gd -- /path/to/AzerothSurvivors.exe tests/fixtures/sample.sav screens/   # or the Linux executable
 ```
 
 ### Conventions
 
-- **No game data in the repo or in builds.** Don't commit the save key, MPQ contents, data derived from the exe, or saves other than the test fixture. Everything from the game is read at run time from the user's own files. Test fixtures are synthetic.
+- **No game data in the repo or in builds.** Don't commit the save key, MPQ contents, data derived from the game executable, or saves other than the test fixture. Everything from the game is read at run time from the user's own files. Test fixtures are synthetic.
 - **Layout:**
   - Pure logic (`src/codec`, `src/model`, `src/assets` parsers) has no scene or UI dependencies and is unit-tested.
   - `src/ui` only wires things together.
