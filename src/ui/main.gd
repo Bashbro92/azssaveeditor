@@ -4,6 +4,7 @@ extends Control
 var session := EditorSession.new()
 var settings := Settings.load_from()
 var _status := Label.new()
+var _version := Label.new()
 var _save_button: Button
 var _fill_button: Button
 var _tabs := TabContainer.new()
@@ -22,6 +23,7 @@ func _ready() -> void:
 		panel.bind(session)
 	root.add_child(_tabs)
 	session.edited.connect(func() -> void: _set_unsaved(true))
+	session.configured.connect(_show_version)
 	_configure_from_settings()
 
 
@@ -42,10 +44,19 @@ func _toolbar() -> HBoxContainer:
 	_fill_button = _button("Fill 100%", session.fill_all)
 	_fill_button.tooltip_text = "Unlock everything: heroes, zones, gear, codex, achievements, talent XP."
 	bar.add_child(_fill_button)
-	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(_spacer())
+	_version.mouse_filter = Control.MOUSE_FILTER_PASS
+	bar.add_child(_version)
+	bar.add_child(_spacer())
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	bar.add_child(_status)
 	return bar
+
+
+static func _spacer() -> Control:
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return spacer
 
 
 func _button(text: String, action: Callable) -> Button:
@@ -143,6 +154,17 @@ func _set_unsaved(unsaved: bool) -> void:
 func _update_buttons() -> void:
 	_save_button.disabled = not session.has_save()
 	_fill_button.disabled = not session.has_save()
+
+
+func _show_version() -> void:
+	_version.text = "Game " + session.game_version if session.game_version else ""
+	_version.tooltip_text = ""
+	_version.remove_theme_color_override("font_color")
+	if session.data_outdated():
+		var data_version := session.game.game_version
+		_version.text += " · editor data from " + (data_version if data_version else "an older version")
+		_version.tooltip_text = "This game version may have spells, talents or codex entries the editor doesn't know yet."
+		_version.add_theme_color_override("font_color", Color(1, 0.7, 0.35))
 
 
 func _show_status(text: String) -> void:

@@ -6,8 +6,11 @@ extends RefCounted
 signal save_changed
 ## The open save was edited and has unsaved changes.
 signal edited
+## Game files were (re)loaded: key, game version and game data.
+signal configured
 
 var key := PackedByteArray()
+var game_version := ""  # read from the exe; "" if not found
 var game: GameData
 var icons := IconCache.new()
 var progress: SaveProgress
@@ -16,17 +19,28 @@ var save_path := ""
 
 ## Reads the key from the exe and opens the Data folder's patch.MPQ for icons. Icons are optional.
 func configure(exe_path: String, data_dir: String, game_data_path: String = GameData.DEFAULT_PATH) -> Result:
-	var found := KeyFinder.find_key_in_file(exe_path)
+	var exe := KeyFinder.read_exe(exe_path)
+	if not exe.ok:
+		return exe
+	var found := KeyFinder.find_key(exe.value)
 	if not found.ok:
 		return found
 	var loaded := GameData.load_file(game_data_path)
 	if not loaded.ok:
 		return loaded
 	key = found.value
+	game_version = VersionFinder.find_version(exe.value)
 	game = loaded.value
 	var archive := MpqArchive.open(data_dir.path_join("patch.MPQ"))
 	icons = IconCache.new(archive.value if archive.ok else null)
+	configured.emit()
 	return Result.success()
+
+
+## Whether the game data was extracted from a different game version than the chosen exe (data
+## generated before versions were recorded counts as different).
+func data_outdated() -> bool:
+	return game != null and game_version != "" and game.game_version != game_version
 
 
 func is_configured() -> bool:

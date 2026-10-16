@@ -26,6 +26,7 @@ var jewels: Array[Dictionary] = []
 var amulets: Array[Dictionary] = []
 var achievements: Array[Dictionary] = []  # key, name, description, icon, group
 var text: Dictionary = {}       # English localisation, key -> string
+var game_version := ""          # the game version the data was extracted from, "" if unknown
 
 
 static func load_file(path: String = DEFAULT_PATH) -> Result:
@@ -49,6 +50,7 @@ static func from_json(json_text: String) -> Result:
 	data.amulets.assign(parsed["amulets"])
 	data.achievements.assign(parsed["achievements"])
 	data.text = parsed["text_en"]
+	data.game_version = parsed.get("game_version", "")
 	for ability: Dictionary in parsed["abilities"]:
 		data.abilities[ability["id"]] = ability
 	if data.talent_trees.size() != data.classes.size() * TREES_PER_CLASS:

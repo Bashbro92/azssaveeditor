@@ -16,6 +16,13 @@ func test_loads_fixture() -> void:
 	assert_eq(data.abilities["cleave"]["name"], "Cleave")
 
 
+func test_game_version_is_optional() -> void:
+	assert_eq(data.game_version, "", "fixture has none")
+	var parsed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIXTURE))
+	parsed["game_version"] = "0.94.1"
+	assert_eq(GameData.from_json(JSON.stringify(parsed)).value.game_version, "0.94.1")
+
+
 func test_missing_file_fails() -> void:
 	assert_failed(GameData.load_file("res://does/not/exist.json"))
 
