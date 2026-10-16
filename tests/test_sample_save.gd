@@ -4,6 +4,7 @@ extends TestCase
 const FIXTURE := "res://tests/fixtures/sample.sav"
 
 var key: PackedByteArray
+var version: String
 var sealed: String
 
 
@@ -12,16 +13,22 @@ func before_all() -> void:
 	if exe.is_empty():
 		skip("set AZS_EXE to the game exe to run")
 		return
-	var found := KeyFinder.find_key_in_file(exe)
+	var bytes := KeyFinder.read_exe(exe)
+	var found := KeyFinder.find_key(bytes.value) if bytes.ok else bytes
 	if not found.ok:
 		skip(found.error)
 		return
 	key = found.value
+	version = VersionFinder.find_version(bytes.value)
 	sealed = FileAccess.get_file_as_string(FIXTURE)
 
 
 func test_key_length() -> void:
 	assert_eq(key.size(), 42)
+
+
+func test_game_version_found() -> void:
+	assert_true(version.split(".").size() == 3, "got '%s'" % version)
 
 
 func test_sample_decrypts() -> void:
@@ -38,7 +45,7 @@ func test_sample_reseals_byte_for_byte() -> void:
 
 ## Same totals as the generated "100%" save that was verified in game (2026-10-15), except that
 ## achievements now cover all 66 keys found in the exe (the verified save had 39 of them), and
-## game 0.94.0 added the druid spell Shred and with it one legendary codex entry (140 -> 141).
+## game 0.94.1 added the druid spell Shred and with it one legendary codex entry (140 -> 141).
 func test_fill_all_matches_verified_save() -> void:
 	if not FileAccess.file_exists(GameData.DEFAULT_PATH):
 		print("  (test_fill_all_matches_verified_save: no %s)" % GameData.DEFAULT_PATH)
