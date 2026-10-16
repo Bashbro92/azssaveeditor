@@ -1,5 +1,5 @@
 extends TestCase
-## Uses a small synthetic fixture; a sanity check against the real generated data runs when it exists.
+## Uses a small synthetic fixture; the real exe's data is checked in test_real_game_data.gd.
 
 const FIXTURE := "res://tests/fixtures/game_data_min.json"
 
@@ -14,13 +14,6 @@ func test_loads_fixture() -> void:
 	assert_ok(GameData.load_file(FIXTURE))
 	assert_eq(data.classes.size(), 2)
 	assert_eq(data.abilities["cleave"]["name"], "Cleave")
-
-
-func test_game_version_is_optional() -> void:
-	assert_eq(data.game_version, "", "fixture has none")
-	var parsed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIXTURE))
-	parsed["game_version"] = "0.94.1"
-	assert_eq(GameData.from_json(JSON.stringify(parsed)).value.game_version, "0.94.1")
 
 
 func test_missing_file_fails() -> void:
@@ -75,32 +68,3 @@ func test_icon_names_are_unique_and_sorted() -> void:
 	sorted.sort()
 	assert_eq(names, sorted)
 
-
-func test_real_generated_data_if_present() -> void:
-	if not FileAccess.file_exists(GameData.DEFAULT_PATH):
-		print("  (test_real_generated_data_if_present: no %s)" % GameData.DEFAULT_PATH)
-		return
-	var real: GameData = GameData.load_file().value
-	assert_eq(real.classes.size(), 9)
-	assert_eq(real.zone_ids().size(), 9)
-	assert_eq(real.trees_for_class("warrior")[0]["name"], "Arms")
-	assert_eq(real.item_name(101010), "Valor Helm")
-	assert_eq(real.item_name(104940), "Kingsfall")
-	assert_eq(real.achievements.size(), 66)
-	# every real tree fits the talent budget, so "max tree" fills it completely on a fresh class,
-	# learning one talent of each exclusive pair (the Feral capstones)
-	var exclusive := 0
-	for tree in real.talent_trees:
-		var total := 0
-		var learned: Array[String] = []
-		for t: Dictionary in tree["talents"]:
-			if t["excludes"].any(func(other: String) -> bool: return other in learned):
-				exclusive += 1
-				continue
-			learned.append(t["id"])
-			total += int(t["ranks"])
-		var p := SaveProgress.from_text("")
-		p.max_tree(1, tree["talents"])
-		assert_eq(p.talent_points_spent(1), total, tree["name"])
-		assert_true(total <= SaveProgress.MAX_TALENT_POINTS, "%s has %d points" % [tree["name"], total])
-	assert_eq(exclusive, 1, "one capstone pair")

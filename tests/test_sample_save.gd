@@ -5,6 +5,7 @@ const FIXTURE := "res://tests/fixtures/sample.sav"
 
 var key: PackedByteArray
 var version: String
+var game: GameData
 var sealed: String
 
 
@@ -20,6 +21,7 @@ func before_all() -> void:
 		return
 	key = found.value
 	version = VersionFinder.find_version(bytes.value)
+	game = GameData.from_exe(bytes.value).value
 	sealed = FileAccess.get_file_as_string(FIXTURE)
 
 
@@ -47,11 +49,8 @@ func test_sample_reseals_byte_for_byte() -> void:
 ## achievements now cover all 66 keys found in the exe (the verified save had 39 of them), and
 ## game 0.94.1 added the druid spell Shred and with it one legendary codex entry (140 -> 141).
 func test_fill_all_matches_verified_save() -> void:
-	if not FileAccess.file_exists(GameData.DEFAULT_PATH):
-		print("  (test_fill_all_matches_verified_save: no %s)" % GameData.DEFAULT_PATH)
-		return
 	var p := SaveProgress.from_text(SaveCodec.unseal(key, sealed).value)
-	p.fill_all(GameData.load_file().value, 0)
+	p.fill_all(game, 0)
 	var doc := SaveDoc.parse(p.to_text())
 	assert_eq(p.item_count(), 415, "items")
 	assert_eq(doc.first("seen")[1].split(",").size(), 141, "codex entries")

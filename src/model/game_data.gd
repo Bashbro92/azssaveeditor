@@ -2,10 +2,9 @@ class_name GameData
 extends RefCounted
 ## Game content the editor needs: classes, zones, talent trees, abilities, jewelry and gear naming.
 ##
-## Loaded from the JSON written by the knowledge base's tools/azs-data/extract.py (data/azs-data.json),
-## which reads the user's own AzerothSurvivors.exe.
+## Read from the user's own AzerothSurvivors.exe by GameDataExtractor; tests load the same shape
+## from a JSON fixture.
 
-const DEFAULT_PATH := "res://data/azs-data.json"
 const TREES_PER_CLASS := 3
 const GEAR_TIERS := 5
 const ARMOR_SLOTS := 8
@@ -26,12 +25,17 @@ var jewels: Array[Dictionary] = []
 var amulets: Array[Dictionary] = []
 var achievements: Array[Dictionary] = []  # key, name, description, icon, group
 var text: Dictionary = {}       # English localisation, key -> string
-var game_version := ""          # the game version the data was extracted from, "" if unknown
 
 
-static func load_file(path: String = DEFAULT_PATH) -> Result:
+## Game data read from the bytes of the user's AzerothSurvivors.exe.
+static func from_exe(exe: PackedByteArray) -> Result:
+	var extracted := GameDataExtractor.extract(exe)
+	return from_dict(extracted.value) if extracted.ok else extracted
+
+
+static func load_file(path: String) -> Result:
 	if not FileAccess.file_exists(path):
-		return Result.failure("game data not found at %s (generate it with tools/azs-data/extract.py)" % path)
+		return Result.failure("game data not found at %s" % path)
 	return from_json(FileAccess.get_file_as_string(path))
 
 
@@ -39,6 +43,10 @@ static func from_json(json_text: String) -> Result:
 	var parsed: Variant = JSON.parse_string(json_text)
 	if not parsed is Dictionary:
 		return Result.failure("game data is not a JSON object")
+	return from_dict(parsed)
+
+
+static func from_dict(parsed: Dictionary) -> Result:
 	for key in ["classes", "zones", "talent_trees", "abilities", "jewels", "amulets", "achievements", "text_en"]:
 		if not parsed.has(key):
 			return Result.failure("game data is missing '%s'" % key)
@@ -50,7 +58,6 @@ static func from_json(json_text: String) -> Result:
 	data.amulets.assign(parsed["amulets"])
 	data.achievements.assign(parsed["achievements"])
 	data.text = parsed["text_en"]
-	data.game_version = parsed.get("game_version", "")
 	for ability: Dictionary in parsed["abilities"]:
 		data.abilities[ability["id"]] = ability
 	if data.talent_trees.size() != data.classes.size() * TREES_PER_CLASS:

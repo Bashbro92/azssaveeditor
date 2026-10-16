@@ -1,7 +1,9 @@
 extends SceneTree
 ## Renders every icon referenced by the game data into one PNG sheet, to check BLP decoding by eye.
 ##
-##   godot --headless --script tools/render_icon_sheet.gd -- <Data dir> <out.png>
+##   godot --headless --script tools/render_icon_sheet.gd -- <AzerothSurvivors.exe> <out.png>
+##
+## Icons come from the Data folder next to the exe.
 
 const ICON_SIZE := 64
 const COLUMNS := 24
@@ -11,15 +13,16 @@ const ICON_PATH := "Interface\\Icons\\%s.blp"
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() != 2:
-		printerr("usage: godot --headless --script tools/render_icon_sheet.gd -- <Data dir> <out.png>")
+		printerr("usage: godot --headless --script tools/render_icon_sheet.gd -- <AzerothSurvivors.exe> <out.png>")
 		quit(2)
 		return
 	quit(_render(args[0], args[1]))
 
 
-func _render(data_dir: String, out_path: String) -> int:
-	var game := GameData.load_file()
-	var opened := MpqArchive.open(data_dir.path_join("patch.MPQ"))
+func _render(exe_path: String, out_path: String) -> int:
+	var exe := KeyFinder.read_exe(exe_path)
+	var game := GameData.from_exe(exe.value) if exe.ok else exe
+	var opened := MpqArchive.open(exe_path.get_base_dir().path_join("Data/patch.MPQ"))
 	for r in [game, opened]:
 		if not r.ok:
 			printerr(r.error)

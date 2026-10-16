@@ -2,8 +2,7 @@
 .godot/
 /android/
 
-# Generated from the user's own game files; never commit (see README)
-/data/
+# The user's own saves; never commit (see README)
 *.sav
 !/tests/fixtures/*.sav
 

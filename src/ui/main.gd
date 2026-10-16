@@ -45,7 +45,6 @@ func _toolbar() -> HBoxContainer:
 	_fill_button.tooltip_text = "Unlock everything: heroes, zones, gear, codex, achievements, talent XP."
 	bar.add_child(_fill_button)
 	bar.add_child(_spacer())
-	_version.mouse_filter = Control.MOUSE_FILTER_PASS
 	bar.add_child(_version)
 	bar.add_child(_spacer())
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -158,13 +157,6 @@ func _update_buttons() -> void:
 
 func _show_version() -> void:
 	_version.text = "Game " + session.game_version if session.game_version else ""
-	_version.tooltip_text = ""
-	_version.remove_theme_color_override("font_color")
-	if session.data_outdated():
-		var data_version := session.game.game_version
-		_version.text += " · editor data from " + (data_version if data_version else "an older version")
-		_version.tooltip_text = "This game version may have spells, talents or codex entries the editor doesn't know yet."
-		_version.add_theme_color_override("font_color", Color(1, 0.7, 0.35))
 
 
 func _show_status(text: String) -> void:

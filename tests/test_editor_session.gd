@@ -102,13 +102,3 @@ func test_settings_default_when_missing() -> void:
 func test_icon_cache_without_archive_returns_null() -> void:
 	assert_eq(IconCache.new().get_icon("Ability_Warrior_Cleave"), null)
 
-
-func test_data_outdated_compares_exe_and_data_versions() -> void:
-	var s := _fresh_session()
-	assert_false(s.data_outdated(), "exe version unknown")
-	s.game_version = "0.94.1"
-	assert_true(s.data_outdated(), "data without a version")
-	s.game.game_version = "0.94.1"
-	assert_false(s.data_outdated())
-	s.game_version = "0.95.0"
-	assert_true(s.data_outdated())
