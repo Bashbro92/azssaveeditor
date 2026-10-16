@@ -2,7 +2,7 @@
 
 This is a save editor for **Azeroth Survivors**, a fan-made, survivors-style game set in vanilla WoW. It uses Godot 4.7 with the Compatibility renderer and is written in GDScript.
 
-**Latest tested game version: 0.94.0.** After a game update, regenerate `data/azs-data.json` from the new exe (see Development) so new spells, talents and codex entries show up.
+**Latest tested game version: 0.94.1.** The top bar shows the version of the exe you chose. It turns orange when the editor's game data comes from a different version. Then regenerate `data/azs-data.json` from the new exe (see Development) so new spells, talents and codex entries show up.
 
 You need your own copy of the game. The editor reads the save key and the game data from your `AzerothSurvivors.exe`, and icons from your `Data/patch.MPQ`, at run time. Nothing from the game is bundled.
 
