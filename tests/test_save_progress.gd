@@ -156,6 +156,41 @@ func test_max_tree_keeps_higher_talent_xp() -> void:
 	assert_eq(p.talent_xp(1), SaveProgress.FULL_TALENT_XP + 5)
 
 
+func _capstones() -> Array:
+	return [
+		{"id": "bear", "row": 1, "col": 0, "ranks": 1, "excludes": ["cat"]},
+		{"id": "cat", "row": 1, "col": 2, "ranks": 1, "excludes": ["bear"]},
+		{"id": "base", "row": 0, "col": 0, "ranks": 3, "excludes": []},
+	]
+
+
+func test_max_tree_learns_only_one_of_exclusive_talents() -> void:
+	var p := SaveProgress.from_text("")
+	var tree := _capstones()
+	p.max_tree(11, tree)
+	assert_eq(p.talent_rank(11, "bear"), 1, "the first one wins")
+	assert_eq(p.talent_rank(11, "cat"), 0)
+	assert_eq(p.tree_points_spent(11, tree), 4)
+
+
+func test_max_tree_keeps_the_exclusive_talent_already_learned() -> void:
+	var p := SaveProgress.from_text("talent|11|0|cat:1")
+	p.max_tree(11, _capstones())
+	assert_eq(p.talent_rank(11, "cat"), 1)
+	assert_eq(p.talent_rank(11, "bear"), 0)
+
+
+func test_set_talent_unlearns_what_it_excludes() -> void:
+	var p := SaveProgress.from_text("talent|11|0|bear:1,base:2")
+	var tree := _capstones()
+	p.set_talent(11, tree[1], 1)
+	assert_eq(p.talent_rank(11, "cat"), 1)
+	assert_eq(p.talent_rank(11, "bear"), 0)
+	assert_eq(p.talent_rank(11, "base"), 2, "others untouched")
+	p.set_talent(11, tree[0], 0)
+	assert_eq(p.talent_rank(11, "cat"), 1, "unlearning excludes nothing")
+
+
 func test_reset_tree_and_reset_talents() -> void:
 	var p := _progress()
 	var tree := [{"id": "t1", "row": 0, "col": 0, "ranks": 5}]

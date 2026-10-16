@@ -76,8 +76,11 @@ func _show_class(c: Dictionary) -> void:
 			grid.add_child(_icon(t["icon"], 24))
 			grid.add_child(name_label)
 			grid.add_child(_spin(p.talent_rank(class_id, talent_id), int(t["ranks"]), func(v: int) -> void:
-				p.set_talent_rank(class_id, talent_id, v)
-				_update_points(class_id), 70))
+				p.set_talent(class_id, t, v)
+				if t.get("excludes", []).is_empty():
+					_update_points(class_id)
+				else:
+					_show_class(c), 70))  # an excluded talent may have been unlearned
 		column.add_child(grid)
 		trees_row.add_child(column)
 

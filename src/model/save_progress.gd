@@ -155,6 +155,14 @@ func set_talent_rank(class_id: int, talent_id: String, rank: int) -> void:
 	_dirty["talent"] = true
 
 
+## Sets a talent's rank; learning it unlearns the talents it excludes (e.g. the other capstone).
+func set_talent(class_id: int, talent: Dictionary, rank: int) -> void:
+	set_talent_rank(class_id, talent["id"], rank)
+	if rank > 0:
+		for other_id: String in talent.get("excludes", []):
+			set_talent_rank(class_id, other_id, 0)
+
+
 ## Talent points earned with this much talent XP (0 … MAX_TALENT_POINTS).
 static func talent_points_for_xp(xp: int) -> int:
 	var points := 0
@@ -195,14 +203,18 @@ func tree_points_spent(class_id: int, talents: Array) -> int:
 
 
 ## Fills a tree row by row (as the game unlocks rows) up to each talent's max rank, without the
-## class going over MAX_TALENT_POINTS. Raises talent XP to FULL_TALENT_XP so the points are earned.
+## class going over MAX_TALENT_POINTS. Of talents that exclude each other, the one already learned,
+## else the first, is kept. Raises talent XP to FULL_TALENT_XP so the points are earned.
 func max_tree(class_id: int, talents: Array) -> void:
 	var budget := MAX_TALENT_POINTS - (talent_points_spent(class_id) - tree_points_spent(class_id, talents))
 	var ordered := talents.duplicate()
 	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return [int(a["row"]), int(a["col"])] < [int(b["row"]), int(b["col"])])
 	for t: Dictionary in ordered:
-		var rank := clampi(int(t["ranks"]), 0, maxi(budget, 0))
+		var excluded := false
+		for other_id: String in t.get("excludes", []):
+			excluded = excluded or talent_rank(class_id, other_id) > 0
+		var rank := 0 if excluded else clampi(int(t["ranks"]), 0, maxi(budget, 0))
 		set_talent_rank(class_id, t["id"], rank)
 		budget -= rank
 	set_talent_xp(class_id, maxi(talent_xp(class_id), FULL_TALENT_XP))
