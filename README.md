@@ -2,6 +2,8 @@
 
 This is a save editor for **Azeroth Survivors**, a fan-made, survivors-style game set in vanilla WoW. It uses Godot 4.7 with the Compatibility renderer and is written in GDScript.
 
+**Latest tested game version: 0.94.0.** After a game update, regenerate `data/azs-data.json` from the new exe (see Development) so new spells, talents and codex entries show up.
+
 You need your own copy of the game. The editor reads the save key and the game data from your `AzerothSurvivors.exe`, and icons from your `Data/patch.MPQ`, at run time. Nothing from the game is bundled.
 
 This is an unofficial tool for your own single-player saves. It bypasses the game's tamper check, so please don't share edited saves without the game developer's OK.
@@ -14,7 +16,7 @@ This is an unofficial tool for your own single-player saves. It bypasses the gam
 4. Edit in the tabs, or use **Fill 100%** to unlock everything:
    - **Overview:** heroes and lifetime stats;
    - **Zones:** zones open and won per class;
-   - **Talents:** talent XP and ranks;
+   - **Talents:** talent XP and ranks. Talents that exclude each other, such as the druid's Dire Bear Form and Cat Form, are never learned together;
    - **Collection:** gear per class and tier;
    - **Codex:** rings, trinkets, amulets and legendary amulets;
    - **Achievements.**
