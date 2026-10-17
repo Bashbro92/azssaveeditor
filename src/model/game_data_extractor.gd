@@ -33,6 +33,7 @@ const TALENT_TEXTS: Array[String] = [
 const ACHIEVEMENTS_START := "Fully TalentedEarn all {n}"
 const ACHIEVEMENTS_CODE_SPAN := 0x8000  # the builder is ~14 KB of code
 const ZONE_ICON := "INV_Misc_Map_01"
+const FIRST_ZONE_ICON := "INV_Misc_Bandana_03"  ## the zone achievement icon table's first entry (Elwynn)
 
 var _exe: ExeImage
 
@@ -170,7 +171,7 @@ func _achievements(text: Dictionary, classes: Array, zones: Array) -> Array:
 	block.assign(keys.slice(first, last))
 	block.append_array(TALENT_TEXTS)
 	var fixed := assemble_achievements(_exe.lea_strings(refs[0], ACHIEVEMENTS_CODE_SPAN), block)
-	return fixed + templated_achievements(classes, zones)
+	return fixed + templated_achievements(classes, zones, _zone_icons(zones.size()))
 
 
 # ---------------------------------------------------------------- pure helpers (unit-tested)
@@ -245,8 +246,29 @@ static func _first_without(achievements: Array, field: String, skip_code_keys: b
 	return null
 
 
-## The per-class and per-zone achievements the game generates from templates.
-static func templated_achievements(classes: Array, zones: Array) -> Array:
+## The zone achievements' icons, one per zone in order: a table of &str whose first entry is the Elwynn one (each
+## the zone's final boss: VanCleef's bandana … C'Thun's trinket). Empty if the exe doesn't have it.
+func _zone_icons(count: int) -> Array[String]:
+	var out: Array[String] = []
+	var at := _exe.find(FIRST_ZONE_ICON.to_ascii_buffer())
+	if at == -1:
+		return out
+	for table in _exe.pointers_to(at):
+		out.clear()
+		for i in range(count):
+			var icon: Variant = _exe.str_at(table + 16 * i)
+			if icon == null:
+				break
+			out.append(icon)
+		if out.size() == count:
+			return out
+	out.clear()
+	return out
+
+
+## The per-class and per-zone achievements the game generates from templates; `zone_icons` (one per zone)
+## replaces the generic map icon when given.
+static func templated_achievements(classes: Array, zones: Array, zone_icons: Array[String] = []) -> Array:
 	var out := []
 	var last: Dictionary = zones[-1]
 	var last_final := _final_boss(last)
@@ -255,12 +277,17 @@ static func templated_achievements(classes: Array, zones: Array) -> Array:
 				"description": "Win a run with a %s." % c["name"], "icon": c["icon"]})
 		out.append({"key": "classlast:" + c["id"], "name": "%s of the Scarab Wall" % c["name"],
 				"description": "Defeat %s at %s with a %s." % [last_final, last["name"], c["name"]], "icon": c["icon"]})
-	for z: Dictionary in zones:
-		var final := _final_boss(z)
-		out.append({"key": "zone:" + z["id"], "name": z["name"],
-				"description": "Defeat %s in %s with any class." % [final, z["name"]], "icon": ZONE_ICON})
-		out.append({"key": "zone9:" + z["id"], "name": "Champion of %s" % z["name"],
-				"description": "Defeat %s in %s with all nine classes." % [final, z["name"]], "icon": ZONE_ICON})
+	for nine in [false, true]:  # every zone's, then every zone's champion, as the game's Achievements list orders them
+		for i in range(zones.size()):
+			var z: Dictionary = zones[i]
+			var final := _final_boss(z)
+			var icon: String = zone_icons[i] if i < zone_icons.size() else ZONE_ICON
+			if nine:
+				out.append({"key": "zone9:" + z["id"], "name": "Champion of %s" % z["name"],
+						"description": "Defeat %s in %s with all nine classes." % [final, z["name"]], "icon": icon})
+			else:
+				out.append({"key": "zone:" + z["id"], "name": z["name"],
+						"description": "Defeat %s in %s with any class." % [final, z["name"]], "icon": icon})
 	for a: Dictionary in out:
 		a["group"] = achievement_group(a["key"])
 	return out
