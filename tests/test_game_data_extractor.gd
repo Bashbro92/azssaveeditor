@@ -32,7 +32,7 @@ func _assemble(strings: Array) -> Dictionary:
 func test_achievement_fields_in_builder_order() -> void:
 	var got := _assemble(["Fully Talented", "Earn all {n} talent points with one class.", "INV_Misc_Book_11"])
 	assert_eq(got["Fully Talented"], {"name": "Fully Talented", "key": "talents:1", "icon": "INV_Misc_Book_11",
-			"description": "Earn all 51 talent points with one class.", "group": "Collection"})
+			"description": "Earn all 51 talent points with one class.", "group": "Classes"})
 
 
 func test_keys_and_icons_follow_in_a_later_run() -> void:

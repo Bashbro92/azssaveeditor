@@ -268,7 +268,7 @@ static func templated_achievements(classes: Array, zones: Array) -> Array:
 
 static func achievement_group(key: String) -> String:
 	const GROUPS := {"count": "Counts", "feat": "Feats", "zone": "Zones", "zone9": "Zones",
-			"class": "Classes", "classlast": "Classes"}
+			"class": "Classes", "classlast": "Classes", "talents": "Classes"}
 	return GROUPS.get(key.get_slice(":", 0), "Collection")
 
 
