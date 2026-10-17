@@ -3,7 +3,7 @@ extends TestCase
 
 const TMP := "user://test_tmp/"
 const KEY := "test-key-not-the-real-one"
-const PLAIN := "unlock|1|2\nstat|kills=1"
+const PLAIN := "open|1|cave\nstat|kills=1"
 
 
 func before_all() -> void:
@@ -45,7 +45,7 @@ func test_open_and_save_round_trip() -> void:
 	var reopened := _fresh_session()
 	assert_ok(reopened.open_save(out))
 	assert_eq(reopened.progress.stat("kills"), 5)
-	assert_eq(reopened.progress.zones_unlocked(1), 2)
+	assert_eq(reopened.progress.zones_unlocked(1, reopened.game.zone_ids()), 2)
 
 
 func test_save_over_existing_keeps_backup() -> void:

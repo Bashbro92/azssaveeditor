@@ -1,7 +1,7 @@
 extends TestCase
 
 const SAMPLE := "pick|1|1|1|meadow|Hero|4,5,2,4,0|100,100,100,100\n" \
-		+ "unlock|1|2\n" \
+		+ "open|1|cave\n" \
 		+ "items|101000,101200\n" \
 		+ "equip|1|0:101000\n" \
 		+ "talent|1|2254|t1:5,t2:2\n" \
@@ -12,6 +12,8 @@ const SAMPLE := "pick|1|1|1|meadow|Hero|4,5,2,4,0|100,100,100,100\n" \
 		+ "beat|1|meadow\n" \
 		+ "future|kept|as-is\n" \
 		+ "hero|1|1|1|4,5,2,4,0"
+
+var zones := PackedStringArray(["meadow", "cave"])
 
 var game: GameData
 
@@ -32,7 +34,7 @@ func test_unedited_save_writes_back_exactly() -> void:
 
 func test_reads_values() -> void:
 	var p := _progress()
-	assert_eq(p.zones_unlocked(1), 2)
+	assert_eq(p.zones_unlocked(1, zones), 2)
 	assert_true(p.is_beaten(1, "meadow"))
 	assert_false(p.is_beaten(1, "cave"))
 	assert_eq(p.talent_xp(1), 2254)
@@ -48,7 +50,7 @@ func test_reads_values() -> void:
 
 func test_setting_same_value_is_not_a_change() -> void:
 	var p := _progress()
-	p.set_zones_unlocked(1, 2, 9)
+	p.set_zones_unlocked(1, 2, zones)
 	p.set_beaten(1, "meadow", true)
 	p.set_item(101000, true)
 	p.set_stat("kills", 10)
@@ -80,17 +82,30 @@ func test_talent_ranks() -> void:
 
 func test_zones_open_is_clamped() -> void:
 	var p := _progress()
-	p.set_zones_unlocked(1, 99, 2)
-	assert_eq(p.zones_unlocked(1), 2)
-	p.set_zones_unlocked(1, -5, 2)
-	assert_eq(p.zones_unlocked(1), SaveProgress.MIN_ZONES_OPEN)
-	assert_eq(SaveDoc.parse(p.to_text()).first("unlock"), PackedStringArray(["unlock", "1", "1"]))
+	p.set_zones_unlocked(1, 99, zones)
+	assert_eq(p.zones_unlocked(1, zones), 2)
+	p.set_zones_unlocked(1, -5, zones)
+	assert_eq(p.zones_unlocked(1, zones), SaveProgress.MIN_ZONES_OPEN)
+	assert_eq(SaveDoc.parse(p.to_text()).first("open"), PackedStringArray(["open", "1", "meadow"]))
+
+
+func test_older_unlock_counts_open_the_zones_added_before_them() -> void:
+	var order := PackedStringArray(["elwynn", "duskwood", "wsg", "ungoro", "ab", "feralas", "arena", "sm", "av", "brm",
+			"aq", "naxx"])
+	var p := SaveProgress.from_text("pick|1\nunlock|1|4\nunlock|4|9\nunlock|5|0\nopen|7|sm\nunlock|7|3\nstat|kills=1")
+	assert_eq(p.zones_unlocked(1, order), 5, "4 was up to Arathi Basin, Un'Goro now before it")
+	assert_eq(p.zones_unlocked(4, order), 11, "9 was up to Ahn'Qiraj")
+	assert_eq(p.zones_unlocked(5, order), 1)
+	assert_eq(p.zones_unlocked(7, order), 8, "the furthest of its lines")
+	p.set_zones_unlocked(1, 12, order)
+	assert_eq(p.to_text(), "pick|1\nopen|1|naxx\nopen|4|aq\nopen|5|elwynn\nopen|7|wsg\nopen|7|sm\nstat|kills=1",
+			"open lines in the unlock lines' place; the game takes a class's furthest")
 
 
 func test_class_without_unlock_record_has_first_zone_open() -> void:
 	var p := _progress()
-	assert_eq(p.zones_unlocked(4), SaveProgress.MIN_ZONES_OPEN)
-	p.set_zones_unlocked(4, 1, 2)
+	assert_eq(p.zones_unlocked(4, zones), SaveProgress.MIN_ZONES_OPEN)
+	p.set_zones_unlocked(4, 1, zones)
 	assert_false(p.is_modified(), "setting the default writes nothing")
 
 
@@ -212,14 +227,14 @@ func test_reset_talents_without_ranks_is_not_a_change() -> void:
 func test_win_all_zones_opens_every_zone() -> void:
 	var p := _progress()
 	p.win_all_zones(4, PackedStringArray(["meadow", "cave"]))
-	assert_eq(p.zones_unlocked(4), 2)
+	assert_eq(p.zones_unlocked(4, zones), 2)
 	assert_true(p.is_beaten(4, "meadow") and p.is_beaten(4, "cave"))
 
 
 func test_clear_zones_back_to_first_zone() -> void:
 	var p := _progress()
 	p.clear_zones(1, PackedStringArray(["meadow", "cave"]))
-	assert_eq(p.zones_unlocked(1), SaveProgress.MIN_ZONES_OPEN)
+	assert_eq(p.zones_unlocked(1, zones), SaveProgress.MIN_ZONES_OPEN)
 	assert_false(p.is_beaten(1, "meadow"))
 
 
@@ -287,7 +302,7 @@ func test_fill_all() -> void:
 	var reread := SaveProgress.from_text(p.to_text())
 	for class_id in [1, 4]:
 		assert_true(reread.heroes.has(class_id), "hero %d" % class_id)
-		assert_eq(reread.zones_unlocked(class_id), 2)
+		assert_eq(reread.zones_unlocked(class_id, game.zone_ids()), 2)
 		assert_true(reread.is_beaten(class_id, "meadow") and reread.is_beaten(class_id, "cave"))
 		assert_eq(reread.talent_xp(class_id), SaveProgress.FULL_TALENT_XP)
 	assert_eq(reread.item_count(), (8 + 1) * 5 + (8 + 2) * 5)

@@ -20,7 +20,7 @@ func build() -> void:
 	bar.add_child(_label("All classes:"))
 	bar.add_child(_button("Open all", func() -> void: _apply_bulk(func() -> void:
 		for id in class_ids:
-			p.set_zones_unlocked(id, zone_count, zone_count))))
+			p.set_zones_unlocked(id, zone_count, zone_ids))))
 	bar.add_child(_button("Win all", func() -> void: _apply_bulk(func() -> void:
 		for id in class_ids:
 			p.win_all_zones(id, zone_ids))))
@@ -40,8 +40,8 @@ func build() -> void:
 	for c in session.game.classes:
 		var class_id := int(c["wow_class_id"])
 		grid.add_child(_label(c["name"], 120))
-		grid.add_child(_spin(p.zones_unlocked(class_id), zone_count,
-				func(v: int) -> void: p.set_zones_unlocked(class_id, v, zone_count), 70, SaveProgress.MIN_ZONES_OPEN))
+		grid.add_child(_spin(p.zones_unlocked(class_id, zone_ids), zone_count,
+				func(v: int) -> void: p.set_zones_unlocked(class_id, v, zone_ids), 70, SaveProgress.MIN_ZONES_OPEN))
 		for zone_id in zone_ids:
 			grid.add_child(_check("", p.is_beaten(class_id, zone_id),
 					func(on: bool) -> void: p.set_beaten(class_id, zone_id, on)))

@@ -48,16 +48,21 @@ func test_sample_reseals_byte_for_byte() -> void:
 
 
 ## Same totals as the generated "100%" save that was verified in game (2026-10-15), except that
-## achievements now cover all 66 keys found in the exe (the verified save had 39 of them), and
-## game 0.94.1 added the druid spell Shred and with it one legendary codex entry (140 -> 141).
+## achievements now cover all 72 keys found in the exe (the verified save had 39 of them), game 0.94.1
+## added the druid spell Shred and with it one legendary codex entry (140 -> 141), and 0.96.0 three zones
+## and the PvP tier (415 -> 498 pieces), with zones opened by `open|` lines in place of `unlock|`.
 func test_fill_all_matches_verified_save() -> void:
 	var p := SaveProgress.from_text(SaveCodec.unseal(key, sealed).value)
 	p.fill_all(game, 0)
 	var doc := SaveDoc.parse(p.to_text())
-	assert_eq(p.item_count(), 415, "items")
+	assert_eq(p.item_count(), 498, "items")
 	assert_eq(doc.first("seen")[1].split(",").size(), 141, "codex entries")
-	assert_eq(p.achievements().size(), 66, "achievements")
-	assert_eq(doc.records_of("beat").size(), 81, "zone wins")
+	assert_eq(p.achievements().size(), 72, "achievements")
+	assert_eq(doc.records_of("beat").size(), 108, "zone wins")
+	assert_eq(doc.records_of("unlock").size(), 0, "the older lines are gone")
+	for r in doc.records_of("open"):
+		assert_eq(r[2], "naxx", "every zone open")
+	assert_eq(doc.records_of("open").size(), 9)
 	assert_eq(p.hero_classes().size(), 9, "heroes")
 
 

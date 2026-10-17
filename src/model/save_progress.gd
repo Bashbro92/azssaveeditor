@@ -2,13 +2,16 @@ class_name SaveProgress
 extends RefCounted
 ## Typed, editable view of a save's progression records over a SaveDoc.
 ##
-## Understands: hero, unlock, beat, talent, items, seen, ach, achat, stat. Every other record (pick,
+## Understands: hero, open (and the older unlock), beat, talent, items, seen, ach, achat, stat. Every other record (pick,
 ## equip, look, perk, tabard, pets, resets, unknown kinds) is left untouched. Only record kinds that
 ## were changed are rewritten, so an unedited save writes back byte for byte.
 ## Classes are WoW class ids (1 warrior … 11 druid), as stored in the save.
 
 const MAX_RARITY := 4  # 0 Common … 4 Legendary
 const MIN_ZONES_OPEN := 1
+## The zones a pre-0.96.0 `unlock|class|n` line counted, in their order then: the game reads n (clamped
+## to 1-9) as "open up to the n-th of these" (ELF 0x8f06de0), so zones added before them are open too.
+const LEGACY_ZONES: Array[String] = ["elwynn", "duskwood", "wsg", "ab", "feralas", "arena", "av", "brm", "aq"]
 ## Talent XP curve, from the game's talents view (exe 0x1402c9de1): point n costs 65 + 15·n XP
 ## (80, 95, 110 … 830), for MAX_TALENT_POINTS points. Verified against a real save.
 const MAX_TALENT_POINTS := 51
@@ -27,7 +30,7 @@ const _DEFAULT_RACE := {1: 1, 2: 1, 3: 2, 4: 1, 5: 1, 7: 2, 8: 1, 9: 1, 11: 6}
 
 var doc: SaveDoc
 var heroes: Dictionary = {}        # class -> PackedStringArray record
-var unlocked: Dictionary = {}      # class -> zones open
+var opened: Dictionary = {}        # class -> zone ids open up to (the game takes the furthest)
 var _beaten: Array = []            # [class, zone id] in save order
 var _talents: Dictionary = {}      # class -> {"xp": int, "ranks": Array of [id, rank]}
 var _talent_order: Array[int] = []
@@ -74,17 +77,24 @@ func ensure_hero(class_id: int) -> void:
 	_dirty["hero"] = true
 
 
-## Zones open to a class. A class without an unlock record has only its first zone open.
-func zones_unlocked(class_id: int) -> int:
-	return unlocked.get(class_id, MIN_ZONES_OPEN)
+## How many of `zones` (the game's zone ids, in order) are open to a class: up to the furthest its
+## `open|class|zone` lines (0.96.0 on) or `unlock|class|n` lines (before) name. A class without one has
+## only its first zone open.
+func zones_unlocked(class_id: int, zones: PackedStringArray) -> int:
+	var count := MIN_ZONES_OPEN
+	for zone: String in opened.get(class_id, []):
+		count = maxi(count, zones.find(zone) + 1)
+	return count
 
 
-## Sets the zones open to a class, clamped to MIN_ZONES_OPEN..zone_count.
-func set_zones_unlocked(class_id: int, count: int, zone_count: int) -> void:
-	var clamped := clampi(count, MIN_ZONES_OPEN, maxi(MIN_ZONES_OPEN, zone_count))
-	if zones_unlocked(class_id) != clamped:
-		unlocked[class_id] = clamped
-		_dirty["unlock"] = true
+## Sets the zones open to a class, clamped to MIN_ZONES_OPEN..the number of `zones`; saved as an
+## `open|class|zone` line naming the last of them (and the older unlock lines dropped).
+func set_zones_unlocked(class_id: int, count: int, zones: PackedStringArray) -> void:
+	var clamped := clampi(count, MIN_ZONES_OPEN, maxi(MIN_ZONES_OPEN, zones.size()))
+	if zones.is_empty() or zones_unlocked(class_id, zones) == clamped:
+		return
+	opened[class_id] = [zones[clamped - 1]]
+	_dirty["open"] = true
 
 
 func is_beaten(class_id: int, zone: String) -> bool:
@@ -110,13 +120,13 @@ func set_beaten_for(class_id: int, zones: PackedStringArray, beaten_now: bool) -
 ## Every zone won by a class, which also opens every zone.
 func win_all_zones(class_id: int, zones: PackedStringArray) -> void:
 	set_beaten_for(class_id, zones, true)
-	set_zones_unlocked(class_id, zones.size(), zones.size())
+	set_zones_unlocked(class_id, zones.size(), zones)
 
 
 ## No zone won by a class, back to only its first zone open.
 func clear_zones(class_id: int, zones: PackedStringArray) -> void:
 	set_beaten_for(class_id, zones, false)
-	set_zones_unlocked(class_id, MIN_ZONES_OPEN, zones.size())
+	set_zones_unlocked(class_id, MIN_ZONES_OPEN, zones)
 
 
 # ---------------------------------------------------------------- talents
@@ -361,7 +371,10 @@ func _read() -> void:
 	for r in doc.records_of("hero"):
 		heroes[r[1].to_int()] = r
 	for r in doc.records_of("unlock"):
-		unlocked[r[1].to_int()] = r[2].to_int()
+		var n := clampi(_field(r, 2).to_int(), 1, LEGACY_ZONES.size())
+		opened.get_or_add(r[1].to_int(), []).append(LEGACY_ZONES[n - 1])
+	for r in doc.records_of("open"):
+		opened.get_or_add(r[1].to_int(), []).append(_field(r, 2))
 	for r in doc.records_of("beat"):
 		_beaten.append([r[1].to_int(), r[2]])
 	for r in doc.records_of("talent"):
@@ -383,6 +396,10 @@ func _read() -> void:
 
 func _write_dirty() -> void:
 	for kind: String in _dirty:
+		if kind == "open" and not doc.records_of("unlock").is_empty():  # in the older lines' place
+			doc.replace_kind("open", [] as Array[PackedStringArray])
+			doc.replace_kind("unlock", _records_for(kind))
+			continue
 		doc.replace_kind(kind, _records_for(kind))
 		if kind == "ach":
 			doc.replace_kind("achat", _records_for("achat"))
@@ -395,9 +412,10 @@ func _records_for(kind: String) -> Array[PackedStringArray]:
 		"hero":
 			for c in heroes:
 				out.append(heroes[c])
-		"unlock":
-			for c in unlocked:
-				out.append(PackedStringArray(["unlock", str(c), str(unlocked[c])]))
+		"open":
+			for c in opened:
+				for zone: String in opened[c]:
+					out.append(PackedStringArray(["open", str(c), zone]))
 		"beat":
 			for b in _beaten:
 				out.append(PackedStringArray(["beat", str(b[0]), b[1]]))
