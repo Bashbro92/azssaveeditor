@@ -7,7 +7,7 @@ extends RefCounted
 ## survives rebuilds as long as the row layouts don't change. Each row is a run of static Rust
 ## values; the offsets below are where each field sits in a row.
 
-const ZONE_ROW := 184
+const ZONE_ROW := 240  # from 0.96.0; the row starts 8 bytes before the id
 const BOSS_ROW := 88
 const ABILITY_ROW := 120
 const CLASS_ROW := 144
@@ -17,6 +17,8 @@ const TALENT_ROW := 104
 const JEWEL_ROW := 72
 const AMULET_ROW := 80
 const STR := 16  # size of a `&str`
+const PVP_ROW := 0x78
+const PVP_WEAPON := 0x30
 
 ## Keys the game builds in code rather than storing as text, by achievement name.
 const CODE_KEYS := {
@@ -34,6 +36,9 @@ const ACHIEVEMENTS_START := "Fully TalentedEarn all {n}"
 const ACHIEVEMENTS_CODE_SPAN := 0x8000  # the builder is ~14 KB of code
 const ZONE_ICON := "INV_Misc_Map_01"
 const FIRST_ZONE_ICON := "INV_Misc_Bandana_03"  ## the zone achievement icon table's first entry (Elwynn)
+## The zone "{class} of the Scarab Wall" is about: the game names Ahn'Qiraj's row and C'Thun even with
+## zones after it (0.96.0's achievement builder).
+const CLASSLAST_ZONE := "aq"
 
 var _exe: ExeImage
 
@@ -60,6 +65,7 @@ func _extract_all() -> Result:
 			return Result.failure("%s not found in the exe (different game build?)" % key)
 		data[key] = rows
 	data["talent_trees"] = _talent_trees(data["classes"].size() * GameData.TREES_PER_CLASS)
+	data["pvp_gear"] = _pvp_gear()
 	var achievements := _achievements(text, data["classes"], data["zones"])
 	if achievements.is_empty():
 		return Result.failure("achievements not found in the exe (different game build?)")
@@ -71,13 +77,32 @@ func _extract_all() -> Result:
 
 func _zones() -> Array:
 	var out := []
-	for o in _rows("Elwynn Forest", ZONE_ROW, [0, 16, 112]):
+	for o in _rows("Elwynn Forest", ZONE_ROW, [0, 16, 160]):
 		var bosses := []
-		var b := _exe.slice_at(o + 80)
+		var b := _exe.slice_at(o + 128)
 		for i in range(b[1] if b[0] != -1 else 0):
 			var row := b[0] + i * BOSS_ROW
 			bosses.append({"name": _exe.str_at(row), "final": _exe.u8(row + 84) == 1})
 		out.append({"id": _exe.str_at(o), "name": _exe.str_at(o + 16), "bosses": bosses})
+	return out
+
+
+## The PvP set's names per class (0x78-byte rows, by WoW class id at +0x70; 0.96.0): WoW class id ->
+## {sets: [Alliance, Horde], weapons: [line × 2 + faction]} (set names at +0x00/+0x10, weapons at +0x20
+## as 0x30-byte {u32 look, &str name} pairs).
+func _pvp_gear() -> Dictionary:
+	var is_row := func(r: int) -> bool: return _has_strs(r, [0, 16]) and _exe.u32(r + 0x70) >= 1 \
+			and _exe.u32(r + 0x70) <= 11 and _exe.slice_at(r + 0x20)[0] != -1
+	var o := _anchor_row("Field Marshal's", 0, func(r: int) -> bool: return is_row.call(r) and _exe.u32(r + 0x70) == 1)
+	var out := {}
+	while o != -1 and is_row.call(o):
+		var weapons := []
+		var w := _exe.slice_at(o + 0x20)
+		for i in range(w[1]):
+			var r: int = w[0] + i * PVP_WEAPON
+			weapons.append_array([_exe.str_at(r + 8), _exe.str_at(r + 0x20)])
+		out[str(_exe.u32(o + 0x70))] = {"sets": [_exe.str_at(o), _exe.str_at(o + 16)], "weapons": weapons}
+		o += PVP_ROW
 	return out
 
 
@@ -271,6 +296,9 @@ func _zone_icons(count: int) -> Array[String]:
 static func templated_achievements(classes: Array, zones: Array, zone_icons: Array[String] = []) -> Array:
 	var out := []
 	var last: Dictionary = zones[-1]
+	for z: Dictionary in zones:
+		if z["id"] == CLASSLAST_ZONE:
+			last = z
 	var last_final := _final_boss(last)
 	for c: Dictionary in classes:
 		out.append({"key": "class:" + c["id"], "name": "%s Victorious" % c["name"],

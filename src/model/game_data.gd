@@ -6,7 +6,9 @@ extends RefCounted
 ## from a JSON fixture.
 
 const TREES_PER_CLASS := 3
-const GEAR_TIERS := 5
+const GEAR_TIERS := 6  # 0 common … 4 legendary, 5 PvP (0.96.0)
+const PVP_TIER := 5
+const PVP_HORDE_TIER := 6  ## the id digit of a PvP piece in the Horde look (the game saves 5, shows Horde heroes 6)
 const ARMOR_SLOTS := 8
 ## Armor slot index -> WoW inventory slot (the `slot.N` text keys and `equip` records use these).
 const ARMOR_INVENTORY_SLOTS: Array[int] = [0, 2, 4, 5, 6, 7, 8, 9]
@@ -25,6 +27,9 @@ var jewels: Array[Dictionary] = []
 var amulets: Array[Dictionary] = []
 var achievements: Array[Dictionary] = []  # key, name, description, icon, group
 var text: Dictionary = {}       # English localisation, key -> string
+## WoW class id (as a string) -> the PvP set's English names: {sets: [Alliance, Horde], weapons: [line × 2 +
+## faction]}; empty for data from before 0.96.0.
+var pvp_gear: Dictionary = {}
 
 
 ## Game data read from the user's game executable.
@@ -58,6 +63,7 @@ static func from_dict(parsed: Dictionary) -> Result:
 	data.amulets.assign(parsed["amulets"])
 	data.achievements.assign(parsed["achievements"])
 	data.text = parsed["text_en"]
+	data.pvp_gear = parsed.get("pvp_gear", {})
 	for ability: Dictionary in parsed["abilities"]:
 		data.abilities[ability["id"]] = ability
 	if data.talent_trees.size() != data.classes.size() * TREES_PER_CLASS:
@@ -99,11 +105,12 @@ static func item_id(wow_class_id: int, slot: int, tier: int) -> int:
 	return 100000 + wow_class_id * 1000 + slot * 100 + tier * 10
 
 
-## Every gear item id of a class: all armor slots and weapon lines, all tiers.
+## Every gear item id of a class: all armor slots and weapon lines, all tiers (PvP ones as the game saves
+## them, in the Alliance look; none without a PvP set).
 func item_ids_for_class(class_id: String, wow_class_id: int) -> PackedInt32Array:
 	var ids := PackedInt32Array()
 	for slot in range(ARMOR_SLOTS + weapon_lines(class_id)):
-		for tier in range(GEAR_TIERS):
+		for tier in range(GEAR_TIERS if pvp_gear.has(str(wow_class_id)) else PVP_TIER):
 			ids.append(item_id(wow_class_id, slot, tier))
 	return ids
 
@@ -118,11 +125,27 @@ func item_name(id: int) -> String:
 	var slot := (id / 100) % 10
 	@warning_ignore("integer_division")
 	var tier := (id / 10) % 10
+	if tier >= PVP_TIER:
+		return _pvp_name(c, slot, tier - PVP_TIER, id)
 	if slot >= ARMOR_SLOTS:
 		return text.get("weapon.%s.%d.%d" % [c["id"], slot - ARMOR_SLOTS, tier], "Weapon %d" % id)
 	var set_name: String = text.get("set.%s.%d" % [c["id"], tier], "")
 	var noun: String = text.get("noun.%s.%d" % [_ARMOR_TYPE.get(c["id"], "cloth"), slot], "")
 	return ("%s %s" % [set_name, noun]).strip_edges()
+
+
+## A PvP piece's name in `faction`'s look (0 Alliance, 1 Horde): the set's name before the noun, or the weapon's.
+func _pvp_name(c: Dictionary, slot: int, faction: int, id: int) -> String:
+	var pvp: Dictionary = pvp_gear.get(str(int(c["wow_class_id"])), {})
+	if pvp.is_empty() or faction > 1:
+		return "Unknown item %d" % id
+	if slot >= ARMOR_SLOTS:
+		var weapons: Array = pvp["weapons"]
+		var at := (slot - ARMOR_SLOTS) * 2 + faction
+		return text.get("weapon.pvp." + weapons[at], weapons[at]) if at < weapons.size() else "Weapon %d" % id
+	var set_name: String = pvp["sets"][faction]
+	var noun: String = text.get("noun.%s.%d" % [_ARMOR_TYPE.get(c["id"], "cloth"), slot], "")
+	return ("%s %s" % [text.get("set.pvp." + set_name, set_name), noun]).strip_edges()
 
 
 ## Icon names used anywhere in the data, for preloading or verification.

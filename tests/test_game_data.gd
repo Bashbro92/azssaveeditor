@@ -61,6 +61,19 @@ func test_item_names() -> void:
 	assert_eq(data.item_name(199000), "Unknown item 199000")
 
 
+func test_pvp_pieces_are_named_by_faction() -> void:
+	var parsed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIXTURE))
+	parsed["pvp_gear"] = {"1": {"sets": ["Field Marshal's", "Warlord's"],
+			"weapons": ["Grand Marshal's Claymore", "High Warlord's Greatsword"]}}
+	var pvp: GameData = GameData.from_dict(parsed).value
+	assert_eq(pvp.item_name(101050), "Field Marshal's Helm")
+	assert_eq(pvp.item_name(101060), "Warlord's Helm")
+	assert_eq(pvp.item_name(101860), "High Warlord's Greatsword")
+	assert_eq(pvp.item_name(101870), "Unknown item 101870")
+	assert_eq(pvp.item_ids_for_class("warrior", 1).size(), (8 + 1) * 6, "with the PvP tier")
+	assert_eq(pvp.item_ids_for_class("rogue", 4).size(), (8 + 2) * 5, "no PvP set here")
+
+
 func test_icon_names_are_unique_and_sorted() -> void:
 	var names := data.icon_names()
 	assert_true(names.has("Talent_1") and names.has("Icon_Amulet") and names.has("Tree_B3") and names.has("Icon_Odds"))

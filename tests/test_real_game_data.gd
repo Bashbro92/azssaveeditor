@@ -21,15 +21,20 @@ func before_all() -> void:
 
 func test_tables() -> void:
 	assert_eq(game.classes.size(), 9)
-	assert_eq(game.zone_ids().size(), 9)
+	assert_eq(game.zone_ids().size(), 12)
 	assert_eq(game.abilities.size(), 112)
 	assert_eq(game.jewels.size(), 22)
 	assert_eq(game.amulets.size(), 17)
-	assert_eq(game.achievements.size(), 66)
+	assert_eq(game.achievements.size(), 72)
 	assert_eq(game.trees_for_class("warrior")[0]["name"], "Arms")
 	assert_eq(game.class_by_wow_id(11)["spell_pool"][-1], "shred")
 	assert_eq(game.item_name(101010), "Valor Helm")
 	assert_eq(game.item_name(104940), "Kingsfall")
+	assert_eq(game.item_name(101050), "Field Marshal's Helm", "PvP, as saved")
+	assert_eq(game.item_name(101060), "Warlord's Helm", "the same piece in the Horde look")
+	assert_eq(game.item_name(101850), "Grand Marshal's Claymore")
+	assert_eq(game.item_name(104950), "Grand Marshal's Mageblade")
+	assert_eq(game.item_ids_for_class("warrior", 1).size(), 9 * 6)
 
 
 func test_achievements_come_with_icons() -> void:
