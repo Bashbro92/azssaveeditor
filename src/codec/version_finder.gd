@@ -1,6 +1,6 @@
 class_name VersionFinder
 extends RefCounted
-## Reads the game version (e.g. "0.94.1") from the user's own AzerothSurvivors.exe.
+## Reads the game version (e.g. "0.95.0") from the user's own AzerothSurvivors.exe.
 ##
 ## The game's update check keeps its own version as a string literal right before two of its
 ## messages. Each anchor gives a candidate; the shortest wins, as a neighbouring literal that ends in
