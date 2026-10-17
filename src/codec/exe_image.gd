@@ -95,7 +95,9 @@ func text_at(o: int, length: int) -> Variant:
 	if o < 0 or length <= 0 or length > _MAX_STR or o + length > bytes.size():
 		return null
 	var raw := bytes.slice(o, o + length)
-	return raw.get_string_from_utf8() if is_text(raw) else null
+	if not is_text(raw):
+		return null
+	return raw.get_string_from_utf8()
 
 
 static func is_text(raw: PackedByteArray) -> bool:
