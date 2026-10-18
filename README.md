@@ -4,7 +4,7 @@ This is a save editor for **Azeroth Survivors**, a fan-made, survivors-style gam
 
 **Latest tested game version: 0.100.1**, Windows and Linux builds. The top bar shows the version of the game you chose.
 
-Since 0.98.0 the game keeps three talent specs per class (`spec|` save lines). The editor keeps them exactly as they are and edits the class's `talent|` line only.
+Since 0.98.0 the game keeps three talent specs per class (`spec|` save lines). The editor reads and edits all three, and can switch which one is lit, keeping the class's `talent|` line in step as the game does.
 
 You need your own copy of the game. The editor works with either build of the game:
 - **Windows:** `AzerothSurvivors.exe`;
@@ -23,7 +23,7 @@ This is an unofficial tool for your own single-player saves. It bypasses the gam
 3. Edit in the tabs, or use **Fill 100%** to unlock everything:
    - **Overview:** heroes and lifetime stats;
    - **Zones:** zones open and won per class;
-   - **Talents:** talent XP and ranks. Talents that exclude each other, such as the druid's Dire Bear Form and Cat Form, are never learned together;
+   - **Talents:** talent XP and ranks, for each of a class's three specs. The lit spec, shown in gold, is the one runs play with; **Make lit** switches to the shown spec as the game does, relearning its ranks within the points earned. Talents that exclude each other, such as the druid's Dire Bear Form and Cat Form, are never learned together;
    - **Collection:** gear per class and tier;
    - **Codex:** rings, trinkets, amulets and legendary amulets;
    - **Achievements.**
