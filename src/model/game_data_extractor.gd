@@ -161,9 +161,10 @@ func _talent_trees(count: int) -> Array:
 func _talent(o: int) -> Dictionary:
 	var packed := _exe.u32(o + 96)
 	var description: Variant = _exe.str_at(o + 64)
+	var requires: Variant = _exe.str_at(o + 80)
 	return {
 		"id": _exe.str_at(o), "name": _exe.str_at(o + 16), "icon": _exe.str_at(o + 32),
-		"description": description if description != null else "",
+		"description": description if description != null else "", "requires": requires if requires != null else "",
 		"row": packed & 0xFF, "col": (packed >> 8) & 0xFF, "ranks": (packed >> 16) & 0xFF,
 	}
 

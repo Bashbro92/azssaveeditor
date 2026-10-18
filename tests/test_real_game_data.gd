@@ -57,6 +57,24 @@ func test_feral_capstones_exclude_each_other() -> void:
 	assert_eq(excludes, {"leader_of_pack": ["cat_form"], "cat_form": ["leader_of_pack"]})
 
 
+## Prerequisites are the milestones: a 1-rank talent of the same tree in a lower row.
+func test_talent_prerequisites_are_lower_milestones() -> void:
+	var required := 0
+	for tree in game.talent_trees:
+		var by_id := {}
+		for t: Dictionary in tree["talents"]:
+			by_id[t["id"]] = t
+		for t: Dictionary in tree["talents"]:
+			if t["requires"] == "":
+				continue
+			required += 1
+			assert_true(by_id.has(t["requires"]), "%s requires %s of its tree" % [t["id"], t["requires"]])
+			var needed: Dictionary = by_id.get(t["requires"], {})
+			assert_eq(needed.get("ranks"), 1, t["requires"])
+			assert_true(int(needed.get("row", 99)) < int(t["row"]), "%s is below %s" % [t["requires"], t["id"]])
+	assert_true(required > 0, "some talents have a prerequisite")
+
+
 ## Every real tree fits the talent budget, so "max tree" fills it completely on a fresh class,
 ## learning one talent of each exclusive pair.
 func test_max_tree_fills_every_tree() -> void:
