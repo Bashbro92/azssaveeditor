@@ -172,9 +172,9 @@ func _fake_elf() -> PackedByteArray:
 	var code := PackedByteArray([0x48, 0x8D, 0x05, 0, 0, 0, 0, 0xBE, 6, 0, 0, 0])  # lea rax, ["Elwynn"]; mov esi, 6
 	code.encode_s32(3, ELF_RODATA - (ELF_TEXT_VA + 7))
 	for chunk: int in ELF_KEY_CHUNKS:
-		var load := PackedByteArray([0x0F, 0x28, 0x05, 0, 0, 0, 0, 0x0F, 0x29, 0x44, 0x24, 0x30])  # movaps; store
-		load.encode_s32(3, chunk - (ELF_TEXT_VA + code.size() + 7))
-		code.append_array(load)
+		var movaps := PackedByteArray([0x0F, 0x28, 0x05, 0, 0, 0, 0, 0x0F, 0x29, 0x44, 0x24, 0x30])  # movaps; store
+		movaps.encode_s32(3, chunk - (ELF_TEXT_VA + code.size() + 7))
+		code.append_array(movaps)
 	for i in range(code.size()):
 		exe[ELF_TEXT + i] = code[i]
 

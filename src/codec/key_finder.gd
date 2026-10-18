@@ -60,8 +60,8 @@ static func _loaded_block(image: ExeImage) -> PackedByteArray:
 	var first := _xor(KEY_PREFIX.to_ascii_buffer().slice(0, _CHUNK_SIZE), _INNER_PAD)
 	var at := image.find(first)
 	while at != -1:
-		for load in image.movaps_refs(at):
-			var chunks := image.movaps_loads(load, _BLOCK_SIZE)
+		for first_load in image.movaps_refs(at):
+			var chunks := image.movaps_loads(first_load, _BLOCK_SIZE)
 			if chunks.size() >= _CHUNKS and chunks[0] == at:
 				var block := PackedByteArray()
 				for chunk in chunks.slice(0, _CHUNKS):
