@@ -2,7 +2,9 @@
 
 This is a save editor for **Azeroth Survivors**, a fan-made, survivors-style game set in vanilla WoW. It uses Godot 4.7 with the Compatibility renderer and is written in GDScript.
 
-**Latest tested game version: 0.97.0**, Windows and Linux builds. The top bar shows the version of the game you chose.
+**Latest tested game version: 0.100.1**, Windows and Linux builds. The top bar shows the version of the game you chose.
+
+Since 0.98.0 the game keeps three talent specs per class (`spec|` save lines). The editor keeps them exactly as they are and edits the class's `talent|` line only.
 
 You need your own copy of the game. The editor works with either build of the game:
 - **Windows:** `AzerothSurvivors.exe`;
