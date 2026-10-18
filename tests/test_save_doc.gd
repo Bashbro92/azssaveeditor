@@ -51,6 +51,16 @@ func test_replace_kind_appends_new_kind() -> void:
 	assert_eq(doc.to_text(), "a|1\nperk|2\nperk|3")
 
 
+func test_replace_kind_inserts_a_new_kind_after_another() -> void:
+	var doc := SaveDoc.parse("a|1\nb|1\nb|2\nc|1\n")
+	var added: Array[PackedStringArray] = [PackedStringArray(["d", "1"]), PackedStringArray(["d", "2"])]
+	doc.replace_kind("d", added, "b")
+	assert_eq(doc.to_text(), "a|1\nb|1\nb|2\nd|1\nd|2\nc|1\n")
+	var more: Array[PackedStringArray] = [PackedStringArray(["e", "1"])]
+	doc.replace_kind("e", more, "missing")
+	assert_eq(doc.to_text(), "a|1\nb|1\nb|2\nd|1\nd|2\nc|1\ne|1\n", "at the end without one")
+
+
 func test_replace_kind_with_nothing_removes_it() -> void:
 	var doc := SaveDoc.parse(SAMPLE)
 	var none: Array[PackedStringArray] = []

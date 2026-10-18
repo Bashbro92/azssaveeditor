@@ -90,3 +90,17 @@ func test_max_tree_fills_every_tree() -> void:
 		p.max_tree(1, tree["talents"])
 		assert_eq(p.talent_points_spent(1), total, tree["name"])
 		assert_true(total <= SaveProgress.MAX_TALENT_POINTS, "%s has %d points" % [tree["name"], total])
+
+
+## A maxed tree is a legal build: the game's sanitizer keeps every rank of it.
+func test_maxed_trees_survive_the_sanitizer() -> void:
+	for c in game.classes:
+		var trees: Array = game.trees_for_class(c["id"])
+		for tree: Dictionary in trees:
+			var p := SaveProgress.from_text("")
+			p.max_tree(1, tree["talents"])
+			var kept := SaveProgress.sanitized_ranks(trees, p.spec_ranks(1), SaveProgress.MAX_TALENT_POINTS)
+			var total := 0
+			for pair: Array in kept:
+				total += pair[1]
+			assert_eq(total, p.talent_points_spent(1), tree["name"])

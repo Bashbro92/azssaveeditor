@@ -323,3 +323,172 @@ func test_fill_all_twice_is_stable() -> void:
 	again.fill_all(game, 2000)
 	assert_false(again.is_modified())
 	assert_eq(again.to_text(), once)
+
+
+# ---------------------------------------------------------------- talent specs
+
+const SPEC_SAVE := "talent|1|2254|t1:5,t2:2\n" \
+		+ "talent|5|23205|h1:5,h2:1\n" \
+		+ "spec|5|1|a:5||\n" \
+		+ "spec|5|1|a:5,b:1|h1:5,h2:1|\n" \
+		+ "seen|ring=3"
+
+
+## Two synthetic trees of one class: a1 (row 0, 15 ranks), a2 (row 1, 3 ranks), milestone a3 (row 2, 1 rank),
+## a4 (row 3, needs a3), and capstones c1 / c2 (row 6) of tree a; b1 (row 0, 5 ranks) of tree b.
+func _spec_trees() -> Array:
+	return [
+		{"talents": [
+			{"id": "a1", "row": 0, "col": 0, "ranks": 15},
+			{"id": "a2", "row": 1, "col": 0, "ranks": 3},
+			{"id": "a3", "row": 2, "col": 1, "ranks": 1},
+			{"id": "a4", "row": 3, "col": 0, "ranks": 5, "requires": "a3"},
+			{"id": "c1", "row": 6, "col": 0, "ranks": 1},
+			{"id": "c2", "row": 6, "col": 2, "ranks": 1},
+		]},
+		{"talents": [{"id": "b1", "row": 0, "col": 0, "ranks": 5}]},
+		{"talents": []},
+	]
+
+
+func test_spec_lines_round_trip() -> void:
+	var text := SPEC_SAVE + "\nspec|9|7|x:1\nspec|x|0\nspec|1\n"
+	var p := SaveProgress.from_text(text)
+	assert_false(p.is_modified())
+	assert_eq(p.to_text(), text)
+
+
+func test_reads_specs_as_the_game_does() -> void:
+	var p := SaveProgress.from_text(SPEC_SAVE)
+	assert_true(p.has_specs(5))
+	assert_eq(p.lit_spec(5), 1, "the later line replaces the earlier one")
+	assert_eq(p.spec_ranks(5, 0), [["a", 5], ["b", 1]])
+	assert_eq(p.spec_ranks(5, 1), [["h1", 5], ["h2", 1]], "the lit spec is the talent record")
+	assert_eq(p.spec_ranks(5), p.spec_ranks(5, 1))
+	assert_eq(p.spec_ranks(5, 2), [])
+	assert_eq(p.talent_rank(5, "a", 0), 5)
+	assert_eq(p.talent_points_spent(5, 0), 6)
+
+
+func test_class_without_spec_line_has_spec_1_lit() -> void:
+	var p := SaveProgress.from_text(SPEC_SAVE)
+	assert_false(p.has_specs(1))
+	assert_eq(p.lit_spec(1), 0)
+	assert_eq(p.spec_ranks(1, 0), [["t1", 5], ["t2", 2]])
+	assert_eq(p.spec_ranks(1, 1), [])
+	assert_eq(p.spec_ranks(1, 2), [])
+
+
+func test_skips_invalid_spec_lines() -> void:
+	var p := SaveProgress.from_text("spec|1\nspec|x|0|a:1\nspec|256|0|a:1\nspec|-1|0|a:1\nspec|2|3|a:1\nspec|3|+2\n" \
+			+ "spec|4|0|a:1|b:2\nspec|7|02|||c:3")
+	for class_id in [1, 2]:
+		assert_false(p.has_specs(class_id), "class %d" % class_id)
+	assert_eq(p.lit_spec(3), 2, "a u8 may have a plus sign")
+	assert_eq(p.spec_ranks(3, 0), [], "missing builds are empty")
+	assert_eq(p.spec_ranks(4, 1), [["b", 2]])
+	assert_eq(p.spec_ranks(4, 2), [])
+	assert_eq(p.lit_spec(7), 2, "and leading zeros")
+
+
+func test_lit_edits_without_spec_record_add_no_spec_line() -> void:
+	var p := _progress()
+	p.set_talent_rank(1, "t1", 3)
+	p.reset_tree(1, [{"id": "t2"}])
+	assert_false(p.has_specs(1))
+	assert_eq(SaveDoc.parse(p.to_text()).records_of("spec").size(), 0)
+
+
+func test_lit_edits_are_mirrored_to_the_lit_build() -> void:
+	var p := SaveProgress.from_text(SPEC_SAVE)
+	p.set_talent_rank(5, "h2", 0)
+	p.set_talent_rank(5, "h3", 2)
+	var text := p.to_text()
+	assert_true(text.contains("talent|5|23205|h1:5,h3:2\n"), text)
+	assert_eq(SaveDoc.parse(text).records_of("spec"), [PackedStringArray(["spec", "5", "1", "a:5,b:1", "h1:5,h3:2", ""])],
+			"one line per class, in the first one's place")
+	p.reset_talents(5)
+	assert_true(p.to_text().contains("talent|5|23205|\nspec|5|1|a:5,b:1||\n"))
+
+
+func test_editing_another_spec_changes_only_its_build() -> void:
+	var p := SaveProgress.from_text(SPEC_SAVE)
+	p.set_talent_rank(5, "b", 3, 0)
+	p.set_talent_rank(5, "c", 1, 2)
+	var text := p.to_text()
+	assert_true(text.contains("talent|5|23205|h1:5,h2:1\nspec|5|1|a:5,b:3|h1:5,h2:1|c:1\n"), text)
+	p.reset_talents(5, 0)
+	assert_true(p.to_text().contains("spec|5|1||h1:5,h2:1|c:1\n"))
+
+
+func test_editing_another_spec_makes_a_spec_record() -> void:
+	var p := _progress()
+	p.set_talent_rank(1, "x", 2, 1)
+	assert_true(p.has_specs(1))
+	assert_eq(p.lit_spec(1), 0)
+	var text := p.to_text()
+	assert_true(text.contains("talent|1|2254|t1:5,t2:2\nspec|1|0|t1:5,t2:2|x:2|\nseen|"), text)
+	assert_eq(SaveProgress.from_text(text).to_text(), text)
+
+
+func test_setting_a_specs_ranks_unchanged_is_not_a_change() -> void:
+	var p := SaveProgress.from_text(SPEC_SAVE)
+	p.set_talent_rank(5, "a", 5, 0)
+	p.set_spec_ranks(5, 2, [])
+	p.set_spec_ranks(1, 2, [])
+	p.reset_talents(4, 1)
+	assert_false(p.is_modified())
+	assert_false(p.has_specs(1) or p.has_specs(4))
+
+
+func test_switch_makes_the_record_and_lights_the_spec() -> void:
+	var p := SaveProgress.from_text("talent|11|23205|a1:5,b1:2\nseen|ring=3")
+	assert_true(p.switch_spec(11, 2, _spec_trees()))
+	assert_eq(p.lit_spec(11), 2)
+	assert_eq(p.talent_points_spent(11), 0, "Spec 3 was empty")
+	assert_eq(p.spec_ranks(11, 0), [["a1", 5], ["b1", 2]], "the old talents kept as Spec 1")
+	assert_eq(p.to_text(), "talent|11|23205|\nspec|11|2|a1:5,b1:2||\nseen|ring=3")
+	assert_true(p.switch_spec(11, 0, _spec_trees()))
+	assert_eq(p.to_text(), "talent|11|23205|a1:5,b1:2\nspec|11|0|a1:5,b1:2||\nseen|ring=3")
+
+
+func test_switch_is_refused_for_the_lit_spec_or_out_of_range() -> void:
+	var p := SaveProgress.from_text(SPEC_SAVE)
+	for spec in [1, 3, -1]:
+		assert_false(p.switch_spec(5, spec, _spec_trees()), "spec %d" % spec)
+	assert_false(p.switch_spec(1, 0, _spec_trees()), "Spec 1 is lit without a record")
+	assert_false(p.is_modified())
+	assert_false(p.has_specs(1))
+
+
+func test_switch_relearns_the_build_within_the_points() -> void:
+	var p := SaveProgress.from_text("talent|11|175|b1:1\nspec|11|0|b1:1|a2:3,a1:4,b1:5|")
+	assert_true(p.switch_spec(11, 1, _spec_trees()))
+	assert_eq(p.talent_points_earned(11), 2)
+	assert_eq(p.spec_ranks(11), [["a1", 2]], "two points, row 1 not open")
+	assert_true(p.to_text().contains("talent|11|175|a1:2\nspec|11|1|b1:1|a1:2|"), p.to_text())
+
+
+func test_switch_drops_rewritten_invalid_lines() -> void:
+	var p := SaveProgress.from_text("talent|1|0|\nspec|1|9|x:1\nspec|x\nseen|")
+	assert_true(p.switch_spec(1, 1, _spec_trees()))
+	assert_eq(p.to_text(), "talent|1|0|\nspec|1|1|||\nseen|")
+
+
+func test_sanitized_ranks_follow_the_tree_rules() -> void:
+	var trees := _spec_trees()
+	var all := [["c1", 1], ["c2", 1], ["a4", 5], ["a3", 1], ["a2", 3], ["a1", 20], ["b1", 9], ["zz", 1]]
+	assert_eq(SaveProgress.sanitized_ranks(trees, all, 51), [["a1", 15], ["b1", 5], ["a2", 3], ["a3", 1], ["a4", 5]],
+			"(row, tree, column) order, max ranks, own talents only; capstones need 30 points below")
+	assert_eq(SaveProgress.sanitized_ranks(trees, all, 17), [["a1", 15], ["b1", 2]], "within the points")
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["a2", 3]], 51), [], "row 1 needs 5 points below in its tree")
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["b1", 5], ["a2", 3]], 51), [["b1", 5]], "not from another tree")
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["a1", 5], ["a2", 3], ["a3", 1], ["a4", 2]], 0), [], "no points")
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["a1", 15], ["a2", 3], ["a4", 2]], 51), [["a1", 15], ["a2", 3]],
+			"a4 needs a3 at full rank")
+
+
+func test_sanitized_ranks_learn_one_capstone() -> void:
+	var trees := [{"talents": [{"id": "low", "row": 0, "col": 0, "ranks": 30}, {"id": "c1", "row": 6, "col": 0, "ranks": 1},
+			{"id": "c2", "row": 6, "col": 2, "ranks": 1}]}]
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["c2", 1], ["c1", 1], ["low", 30]], 51), [["low", 30], ["c1", 1]])

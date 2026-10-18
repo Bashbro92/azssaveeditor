@@ -49,17 +49,25 @@ func first(kind: String) -> PackedStringArray:
 	return PackedStringArray()
 
 
-## Replaces all records of a kind with `replacement`, placed where the first one was (appended at the
-## end if the kind was absent). Other records keep their order.
-func replace_kind(kind: String, replacement: Array[PackedStringArray]) -> void:
+## Replaces all records of a kind with `replacement`, placed where the first one was. If the kind was
+## absent, they go right after the last record of kind `after`, or at the end if there is none. Other
+## records keep their order.
+func replace_kind(kind: String, replacement: Array[PackedStringArray], after: String = "") -> void:
 	var updated: Array[PackedStringArray] = []
 	var inserted := false
+	var at := -1
 	for record in records:
 		if record[0] != kind:
 			updated.append(record)
+			if after != "" and record[0] == after:
+				at = updated.size()
 		elif not inserted:
 			updated.append_array(replacement)
 			inserted = true
 	if not inserted:
-		updated.append_array(replacement)
+		if at == -1:
+			updated.append_array(replacement)
+		else:
+			for i in range(replacement.size()):
+				updated.insert(at + i, replacement[i])
 	records = updated
