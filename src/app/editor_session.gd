@@ -53,17 +53,39 @@ func open_save(path: String) -> Result:
 	var plain := SaveCodec.unseal(key, FileAccess.get_file_as_string(path))
 	if not plain.ok:
 		return plain
-	progress = SaveProgress.from_text(plain.value)
+	progress = read_save(plain.value)
 	save_path = path
 	save_changed.emit()
 	return Result.success()
 
 
-## Seals the current save to `path`. An existing file there is kept as `<path>.bak`.
+## A save's plain text read as the game reads it, with this game's zones and its talent sets relearned.
+func read_save(text: String) -> SaveProgress:
+	var zones: Array[String] = []
+	zones.assign(game.zone_ids())
+	var read := SaveProgress.from_text(text, zones)
+	read.relearn_talents(trees_of)
+	return read
+
+
+## A WoW class id's three talent trees, empty for a class the game doesn't have.
+func trees_of(wow_class_id: int) -> Array:
+	var c := game.class_by_wow_id(wow_class_id)
+	return [] if c.is_empty() else game.trees_for_class(c["id"])
+
+
+## Seals the current save to `path`, as the game writes it: talent sets relearned (talents a spec can't hold, e.g.
+## past its points, are dropped, as the game drops them on reading), then the game's lines in the game's order. An
+## existing file there is kept as `<path>.bak`.
 func save_as(path: String) -> Result:
 	if progress == null:
 		return Result.failure("no save is open")
-	var sealed := SaveCodec.seal(key, progress.to_text())
+	var before := progress.to_text()
+	progress.relearn_talents(trees_of)
+	var text := progress.to_text()
+	if text != before:
+		save_changed.emit()
+	var sealed := SaveCodec.seal(key, text)
 	if not sealed.ok:
 		return sealed
 	if FileAccess.file_exists(path):
@@ -90,3 +112,10 @@ func fill_all() -> void:
 
 func mark_edited() -> void:
 	edited.emit()
+
+
+## The name the game gives an exported save at unix time `now` (in UTC): "AzerothSurvivors 2026-10-19 08-05-09.sav".
+static func export_name(now: int) -> String:
+	var t := Time.get_datetime_dict_from_unix_time(now)
+	return "AzerothSurvivors %04d-%02d-%02d %02d-%02d-%02d.sav" % [t["year"], t["month"], t["day"], t["hour"],
+			t["minute"], t["second"]]

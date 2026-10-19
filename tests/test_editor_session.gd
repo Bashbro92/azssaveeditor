@@ -45,7 +45,25 @@ func test_open_and_save_round_trip() -> void:
 	var reopened := _fresh_session()
 	assert_ok(reopened.open_save(out))
 	assert_eq(reopened.progress.stat("kills"), 5)
-	assert_eq(reopened.progress.zones_unlocked(1, reopened.game.zone_ids()), 2)
+	assert_eq(reopened.progress.zones_unlocked(1), 2)
+
+
+func test_saves_what_the_game_would_write() -> void:
+	var s := _fresh_session()
+	var path := TMP + "e.sav"
+	_write(path, SaveCodec.seal(KEY.to_ascii_buffer(), "future|x\nbeat|1|cave,meadow\ntalent|1|80|t1:3,zz:1\n").value)
+	assert_ok(s.open_save(path))
+	assert_true(s.progress.is_beaten(1, "meadow"))
+	assert_eq(s.progress.talent_rank(1, "t1"), 1, "relearned within the points, as the game reads it")
+	var out := TMP + "f.sav"
+	assert_ok(s.save_as(out))
+	var plain := SaveCodec.unseal(KEY.to_ascii_buffer(), FileAccess.get_file_as_string(out))
+	assert_eq(plain.value, "talent|1|80|t1:1\nbeat|1|meadow,cave\n")
+
+
+func test_export_name_is_the_games() -> void:
+	assert_eq(EditorSession.export_name(1792080337), "AzerothSurvivors 2026-10-15 16-05-37.sav")
+	assert_eq(EditorSession.export_name(0), "AzerothSurvivors 1970-01-01 00-00-00.sav")
 
 
 func test_save_over_existing_keeps_backup() -> void:
