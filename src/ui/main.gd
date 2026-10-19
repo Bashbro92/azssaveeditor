@@ -89,8 +89,11 @@ func _choose_exe() -> void:
 
 # ---------------------------------------------------------------- saves
 
+## Opens in the last folder used, else the game's Saves folder (its exports and backups).
 func _choose_save_to_open() -> void:
-	_file_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.sav ; Azeroth Survivors save"], "Open save", open_save_file)
+	var dir := settings.last_dir if settings.last_dir else _game_saves_dir()
+	_file_dialog(FileDialog.FILE_MODE_OPEN_FILE, ["*.sav ; Azeroth Survivors save", "*.txt ; The game's save file"],
+			"Open save", open_save_file, dir)
 
 
 func open_save_file(path: String) -> void:
@@ -102,14 +105,26 @@ func open_save_file(path: String) -> void:
 	_update_buttons()
 
 
+## Suggests the name the game gives an export, in the game's Saves folder when there is one, so the game's
+## Options, Saves page lists the file for importing.
 func _choose_save_target() -> void:
+	var dir := _game_saves_dir()
+	if dir.is_empty():
+		dir = settings.last_dir
 	_file_dialog(FileDialog.FILE_MODE_SAVE_FILE, ["*.sav ; Azeroth Survivors save"], "Save as",
 			func(path: String) -> void:
 				var saved := session.save_as(path)
 				if saved.ok:
 					_remember_dir(path)
 					_set_unsaved(false)
-				_show_status("Saved " + path.get_file() if saved.ok else saved.error))
+				_show_status("Saved " + path.get_file() if saved.ok else saved.error),
+			dir, EditorSession.export_name(int(Time.get_unix_time_from_system())))
+
+
+## The game's Saves folder if it exists, else "".
+static func _game_saves_dir() -> String:
+	var dir := GameSaveLocation.saves_dir(GameSaveLocation.os_env)
+	return dir if dir != "" and DirAccess.dir_exists_absolute(dir) else ""
 
 
 func _remember_dir(path: String) -> void:
@@ -127,15 +142,18 @@ func show_tab(index: int) -> void:
 
 # ---------------------------------------------------------------- helpers
 
-func _file_dialog(mode: FileDialog.FileMode, filters: PackedStringArray, title: String, on_pick: Callable) -> void:
+func _file_dialog(mode: FileDialog.FileMode, filters: PackedStringArray, title: String, on_pick: Callable,
+		dir: String = "", file: String = "") -> void:
 	var dialog := FileDialog.new()
 	dialog.file_mode = mode
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
 	dialog.filters = filters
 	dialog.title = title
 	dialog.use_native_dialog = true
-	if settings.last_dir:
-		dialog.current_dir = settings.last_dir
+	if dir:
+		dialog.current_dir = dir
+	if file:
+		dialog.current_file = file
 	dialog.file_selected.connect(on_pick)
 	dialog.visibility_changed.connect(func() -> void:
 		if not dialog.visible:
