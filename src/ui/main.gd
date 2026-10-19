@@ -29,7 +29,7 @@ func _ready() -> void:
 
 func _panels() -> Array[EditorPanel]:
 	var panels: Array[EditorPanel] = [OverviewPanel.new(), ZonesPanel.new(), TalentsPanel.new(),
-			CollectionPanel.new(), CodexPanel.new(), AchievementsPanel.new()]
+			CollectionPanel.new(), CodexPanel.new(), AchievementsPanel.new(), PerksPanel.new()]
 	for panel in panels:
 		panel.name = panel.get_script().get_global_name().trim_suffix("Panel")
 	return panels
