@@ -37,6 +37,19 @@ func test_tables() -> void:
 	assert_eq(game.item_ids_for_class("warrior", 1).size(), 9 * 6)
 
 
+func test_perks_tabards_and_companion_looks() -> void:
+	assert_eq(game.perks.size(), 13)
+	assert_eq(game.perks[0], {"id": "rerolls", "name": "Second Thoughts", "icon": "Spell_Nature_TimeStop",
+			"costs": [15, 25, 35], "requires": "count:runs10", "requires_perk": ""})
+	assert_eq(game.perks[-1]["requires_perk"], "companion")
+	assert_eq(game.tabards.size(), 20)
+	assert_eq(game.tabards[0]["id"], 90001)
+	assert_eq(game.tabards.filter(func(t: Dictionary) -> bool: return t["unlock"] == "").size(), 14, "bought ones")
+	assert_eq(game.companion_looks.size(), 12)
+	assert_eq([game.companion_looks[0]["id"], game.companion_looks[0]["unlock"]], ["squirrel", ""])
+	assert_eq(game.companion_looks[-1]["unlock"], "feat:endless40")
+
+
 func test_achievements_come_with_icons() -> void:
 	var by_key := {}
 	for a in game.achievements:

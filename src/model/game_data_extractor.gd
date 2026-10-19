@@ -19,6 +19,9 @@ const AMULET_ROW := 80
 const STR := 16  # size of a `&str`
 const PVP_ROW := 0x78
 const PVP_WEAPON := 0x30
+const PERK_ROW := 0x78
+const TABARD_ROW := 0x40
+const COMPANION_LOOK_ROW := 0x60
 
 ## Keys the game builds in code rather than storing as text, by achievement name.
 const CODE_KEYS := {
@@ -66,6 +69,9 @@ func _extract_all() -> Result:
 		data[key] = rows
 	data["talent_trees"] = _talent_trees(data["classes"].size() * GameData.TREES_PER_CLASS)
 	data["pvp_gear"] = _pvp_gear()
+	data["perks"] = _perks()
+	data["tabards"] = _tabards()
+	data["companion_looks"] = _companion_looks()
 	var achievements := _achievements(text, data["classes"], data["zones"])
 	if achievements.is_empty():
 		return Result.failure("achievements not found in the exe (different game build?)")
@@ -103,6 +109,55 @@ func _pvp_gear() -> Dictionary:
 			weapons.append_array([_exe.str_at(r + 8), _exe.str_at(r + 0x20)])
 		out[str(_exe.u32(o + 0x70))] = {"sets": [_exe.str_at(o), _exe.str_at(o + 16)], "weapons": weapons}
 		o += PVP_ROW
+	return out
+
+
+## The account perks (0x78-byte rows): id +0, name +16, icon +32, u32 cost per rank +48, the achievement that
+## unlocks them +80 and the perk they need first +96.
+func _perks() -> Array:
+	var is_perk := func(r: int) -> bool: return _has_strs(r, [0, 16, 32]) and _exe.slice_at(r + 48)[0] != -1
+	var o := _anchor_row("rerolls", 0, is_perk)
+	var out := []
+	while o != -1 and is_perk.call(o):
+		var costs := []
+		var c := _exe.slice_at(o + 48)
+		for i in range(c[1]):
+			costs.append(_exe.u32(c[0] + 4 * i))
+		out.append({"id": _exe.str_at(o), "name": _exe.str_at(o + 16), "icon": _exe.str_at(o + 32), "costs": costs,
+				"requires": _str_or_empty(o + 80), "requires_perk": _str_or_empty(o + 96)})
+		o += PERK_ROW
+	return out
+
+
+## The tabards (0x40-byte rows): name +0, icon +16, the achievement that earns it +32 ("" = bought with perk points),
+## u32 id +48 (90001-90099) and cost +56.
+func _tabards() -> Array:
+	var is_tabard := func(r: int) -> bool: return _has_strs(r, [0, 16]) and _str_or_empty(r + 32) != null \
+			and _exe.u32(r + 48) > 90000 and _exe.u32(r + 48) < 90100
+	var o := _anchor_row("Stormwind Tabard", 0, is_tabard)
+	if o == -1:
+		return []
+	while is_tabard.call(o - TABARD_ROW):
+		o -= TABARD_ROW
+	var out := []
+	while is_tabard.call(o):
+		out.append({"id": _exe.u32(o + 48), "name": _exe.str_at(o), "icon": _exe.str_at(o + 16),
+				"unlock": _str_or_empty(o + 32), "cost": _exe.u32(o + 56)})
+		o += TABARD_ROW
+	return out
+
+
+## The pickup companions' looks (0x60-byte rows): id +0, name +16, model folder +32, icon +48, the achievement that
+## unlocks it +64 ("" = always), creature display +80 and entry +88 (9001-9999).
+func _companion_looks() -> Array:
+	var is_look := func(r: int) -> bool: return _has_strs(r, [0, 16, 32, 48]) and _str_or_empty(r + 64) != null \
+			and _exe.u32(r + 80) > 0 and _exe.u32(r + 88) > 9000 and _exe.u32(r + 88) < 10000
+	var o := _anchor_row("squirrel", 0, is_look)
+	var out := []
+	while o != -1 and is_look.call(o):
+		out.append({"id": _exe.str_at(o), "name": _exe.str_at(o + 16), "icon": _exe.str_at(o + 48),
+				"unlock": _str_or_empty(o + 64)})
+		o += COMPANION_LOOK_ROW
 	return out
 
 
@@ -358,6 +413,11 @@ func _rows(anchor: String, stride: int, required: Array[int], check: Callable = 
 		out.append(o)
 		o += stride
 	return out
+
+
+## A `&str` at offset o, "" for an empty one, or null if it isn't one.
+func _str_or_empty(o: int) -> Variant:
+	return "" if _exe.u64(o + 8) == 0 else _exe.str_at(o)
 
 
 func _has_strs(o: int, fields: Array[int]) -> bool:

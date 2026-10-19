@@ -30,6 +30,12 @@ var text: Dictionary = {}       # English localisation, key -> string
 ## WoW class id (as a string) -> the PvP set's English names: {sets: [Alliance, Horde], weapons: [line × 2 +
 ## faction]}; empty for data from before 0.96.0.
 var pvp_gear: Dictionary = {}
+## Account perks: id, name, icon, costs (one per rank), requires (achievement key), requires_perk.
+var perks: Array[Dictionary] = []
+## Tabards: id, name, icon, unlock (the achievement that earns it; "" = bought with perk points), cost.
+var tabards: Array[Dictionary] = []
+## The pickup companions' looks: id, name, icon, unlock (the achievement that unlocks it; "" = always).
+var companion_looks: Array[Dictionary] = []
 
 
 ## Game data read from the user's game executable.
@@ -64,6 +70,9 @@ static func from_dict(parsed: Dictionary) -> Result:
 	data.achievements.assign(parsed["achievements"])
 	data.text = parsed["text_en"]
 	data.pvp_gear = parsed.get("pvp_gear", {})
+	data.perks.assign(parsed.get("perks", []))
+	data.tabards.assign(parsed.get("tabards", []))
+	data.companion_looks.assign(parsed.get("companion_looks", []))
 	for ability: Dictionary in parsed["abilities"]:
 		data.abilities[ability["id"]] = ability
 	if data.talent_trees.size() != data.classes.size() * TREES_PER_CLASS:
@@ -163,6 +172,8 @@ func icon_names() -> PackedStringArray:
 		names[j["icon"]] = true
 	for a in achievements:
 		names[a["icon"]] = true
+	for row in perks + tabards + companion_looks:
+		names[row["icon"]] = true
 	var out := PackedStringArray(names.keys())
 	out.sort()
 	return out
