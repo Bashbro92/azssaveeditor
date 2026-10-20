@@ -2,9 +2,9 @@
 
 This is a save editor for **Azeroth Survivors**, a fan-made, survivors-style game set in vanilla WoW. It uses Godot 4.7 with the Compatibility renderer and is written in GDScript.
 
-**Latest tested game version: 0.102.0**, Windows and Linux builds. The top bar shows the version of the game you chose.
+**Latest tested game version: 0.103.1**, Windows and Linux builds. The top bar shows the version of the game you chose.
 
-Since 0.98.0 the game keeps three talent specs per class (`spec|` save lines). The editor reads and edits all three, and can switch which one is lit, keeping the class's `talent|` line in step as the game does. From 0.100.1 to 0.102.x the game data and the save format did not change.
+Since 0.98.0 the game keeps three talent specs per class (`spec|` save lines). The editor reads and edits all three, and can switch which one is lit, keeping the class's `talent|` line in step as the game does. No save line changed from 0.100.1 to 0.103.1. From 0.102.3 the game opens the zone after each won one when it reads a save, and the editor does the same. 0.103.1 adds the no u achievement (73 in all) and the Sapphiron companion look it unlocks; both show up in the editor.
 
 You need your own copy of the game. The editor works with either build of the game:
 - **Windows:** `AzerothSurvivors.exe`;
@@ -31,7 +31,7 @@ This is an unofficial tool for your own single-player saves. It bypasses the gam
 4. **Save as…** writes a sealed save, named as the game names its exports (`AzerothSurvivors YYYY-MM-DD HH-MM-SS.sav`, UTC) and placed in the game's `Saves` folder when it has one. Overwriting a file keeps a `.bak` copy.
 5. In the game, import it with **Options → Saves → Import Save**. The game lists the `.sav` files of its `Saves` folder, and keeps your previous save as `characters.before-import.txt` when importing. Import only takes sealed saves (`RSE1:`), which is what the editor writes.
 
-The editor reads a save as the game reads it and writes it as the game writes it: the same lines in the same order, lists sorted, one `beat` line and one `open` line per class, `stat` only when a count isn't 0, and only dated achievements in `achat`. A save the game wrote comes back byte for byte; an older save (0.94 or 0.95 `unlock` lines, say) comes out as the game would rewrite it. Like the game, the editor drops lines it doesn't know, relearns talents within the points their XP earns, and keeps the last pick, equipped gear and transmog looks as they are. Hero looks aren't checked against what a race offers; the game does that when it loads the save.
+The editor reads a save as the game reads it and writes it as the game writes it: the same lines in the same order, lists sorted, one `beat` line and one `open` line per class, `stat` only when a count isn't 0, and only dated achievements in `achat`. A save the game wrote comes back byte for byte; an older save (0.94 or 0.95 `unlock` lines, say) comes out as the game would rewrite it. Like the game, the editor opens the zone after each won one (0.102.3 on), drops lines it doesn't know, relearns talents within the points their XP earns, and keeps the last pick, equipped gear and transmog looks as they are. Hero looks aren't checked against what a race offers; the game does that when it loads the save.
 
 ## Where the game keeps its save
 
