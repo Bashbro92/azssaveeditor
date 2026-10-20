@@ -654,3 +654,41 @@ func test_sanitized_ranks_learn_one_capstone() -> void:
 	var trees := [{"talents": [{"id": "low", "row": 0, "col": 0, "ranks": 30}, {"id": "c1", "row": 6, "col": 0, "ranks": 1},
 			{"id": "c2", "row": 6, "col": 2, "ranks": 1}]}]
 	assert_eq(SaveProgress.sanitized_ranks(trees, [["c2", 1], ["c1", 1], ["low", 30]], 51), [["low", 30], ["c1", 1]])
+
+
+## A row's choices (0.104.0's companion pick) rule each other out, as capstones do.
+func test_sanitized_ranks_learn_one_choice_of_a_row() -> void:
+	var trees := [{"talents": [{"id": "low", "row": 0, "col": 0, "ranks": 10},
+			{"id": "pick1", "row": 2, "col": 0, "ranks": 3, "exclusive": true},
+			{"id": "plain", "row": 2, "col": 1, "ranks": 3},
+			{"id": "pick2", "row": 2, "col": 2, "ranks": 3, "exclusive": true}]}]
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["pick2", 3], ["plain", 3], ["pick1", 3], ["low", 10]], 51),
+			[["low", 10], ["pick1", 3], ["plain", 3]], "the first choice in (row, column) order is kept")
+
+
+## From 0.104.0 a talent can need one of two others (Legion Gate: either companion) at full rank.
+func test_either_prerequisite_opens_a_talent() -> void:
+	var trees := [{"talents": [{"id": "low", "row": 0, "col": 0, "ranks": 20},
+			{"id": "pick1", "row": 2, "col": 0, "ranks": 3, "exclusive": true},
+			{"id": "pick2", "row": 2, "col": 2, "ranks": 3, "exclusive": true},
+			{"id": "gate", "row": 4, "col": 1, "ranks": 1, "requires": "pick1", "requires_or": "pick2"}]}]
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["low", 20], ["pick2", 3], ["gate", 1]], 51),
+			[["low", 20], ["pick2", 3], ["gate", 1]], "the second one does")
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["low", 20], ["pick1", 3], ["gate", 1]], 51),
+			[["low", 20], ["pick1", 3], ["gate", 1]], "the first one does")
+	assert_eq(SaveProgress.sanitized_ranks(trees, [["low", 20], ["pick1", 2], ["gate", 1]], 51),
+			[["low", 20], ["pick1", 2]], "only at full rank")
+
+
+## 0.104.0 rebuilt a tree and "refunded" its points: the reader is unchanged, so a record of the old tree is replayed
+## against the new one. Ids the new tree lacks are dropped; ids it kept stay only as far as their new rows allow.
+func test_a_rebuilt_tree_is_refunded_as_the_game_reads_it() -> void:
+	var new_tree := [{"talents": []}, {"talents": [
+		{"id": "kept_a", "row": 0, "col": 2, "ranks": 5},
+		{"id": "kept_b", "row": 1, "col": 0, "ranks": 3},
+		{"id": "new", "row": 1, "col": 1, "ranks": 5},
+		{"id": "kept_c", "row": 3, "col": 3, "ranks": 3}]}, {"talents": []}]
+	var p := SaveProgress.from_text("talent|9|%d|kept_a:5,gone_a:5,kept_b:3,gone_b:5,kept_c:5\n" % SaveProgress.FULL_TALENT_XP)
+	p.relearn_talents(func(_c: int) -> Array: return new_tree)
+	assert_eq(p.to_text(), "talent|9|%d|kept_a:5,kept_b:3\n" % SaveProgress.FULL_TALENT_XP,
+			"kept_c's row needs 15 points below it, which the old ids no longer give")

@@ -371,6 +371,8 @@ func switch_spec(class_id: int, spec: int, trees: Array) -> bool:
 ## Relearns every talent set as the game's reader does (exe 0x87cf220 → sanitizer 0x87e5650): a talent record's
 ## ranks within the points its XP earns, and each spec build within the points of its class's first talent record.
 ## `trees_of` gives a WoW class id's three trees (empty for a class the game doesn't have, whose sets come out empty).
+## This is how 0.104.0 refunds the old Demonology points: its reader is 0.103.1's, so an old record is replayed against
+## the new tree, which drops the talents that are gone and keeps those it shares only as far as their new rows allow.
 func relearn_talents(trees_of: Callable) -> void:
 	for t: Array in _talents:
 		var kept := sanitized_ranks(trees_of.call(t[0]), t[2], talent_points_for_xp(t[1]))
@@ -405,7 +407,10 @@ static func sanitized_ranks(trees: Array, ranks: Array, points: int) -> Array:
 	return out
 
 
-## Whether one more rank of talent `t` (of tree `tree_index`) can be learned (exe 0x8550730).
+## Whether one more rank of talent `t` (of tree `tree_index`) can be learned (0.104.0 0x8b02ce0, inlined in the
+## sanitizer 0x8b03170; 0.94.1 0x8550730): a point left, below its max rank, its row open, no rival of its row learned
+## (a capstone's other capstones, a choice's other choices: 0x8b025a0) and, if it has prerequisites, one of them
+## (`requires`, else 0.104.0's `requires_or`) in the class at full rank (0x8b08de0).
 static func _can_learn(trees: Array, ranks: Array, points: int, tree_index: int, t: Dictionary) -> bool:
 	var spent := 0
 	for pair: Array in ranks:
@@ -414,25 +419,27 @@ static func _can_learn(trees: Array, ranks: Array, points: int, tree_index: int,
 	if spent >= points or _rank_in(ranks, t["id"]) >= int(t["ranks"]):
 		return false
 	var below := 0
+	var rivals: bool = row == CAPSTONE_ROW or t.get("exclusive", false)
 	for other: Dictionary in trees[tree_index]["talents"]:
 		var other_row := int(other.get("row", 0))
 		if other_row < row:
 			below += _rank_in(ranks, other["id"])
-		elif row == CAPSTONE_ROW and other_row == CAPSTONE_ROW and other["id"] != t["id"] \
-				and _rank_in(ranks, other["id"]) > 0:
+		elif rivals and other_row == row and other["id"] != t["id"] \
+				and (row == CAPSTONE_ROW or other.get("exclusive", false)) and _rank_in(ranks, other["id"]) > 0:
 			return false
 	if below < POINTS_PER_ROW * row:
 		return false
 	var requires: String = t.get("requires", "")
-	if requires != "":
-		var needed := {}
+	if requires == "":
+		return true
+	for id: String in [requires, t.get("requires_or", "")]:
+		if id == "":
+			continue
 		for tree: Dictionary in trees:
 			for other: Dictionary in tree["talents"]:
-				if other["id"] == requires:
-					needed = other
-		if needed.is_empty() or _rank_in(ranks, requires) < int(needed["ranks"]):
-			return false
-	return true
+				if other["id"] == id and _rank_in(ranks, id) >= int(other["ranks"]):
+					return true
+	return false
 
 
 static func _rank_in(ranks: Array, talent_id: String) -> int:
