@@ -177,18 +177,20 @@ func _abilities() -> Array:
 	return _named_rows("Cleave", ABILITY_ROW, [0, 16, 32])
 
 
+## Each jewel's text holds its {v}: 0.104.0's Linux build puts the amulets right after the last jewel.
 func _jewels() -> Array:
-	return _named_rows("Band of Accuria", JEWEL_ROW, [0, 16, 48])
+	var is_jewel := func(o: int) -> bool: return (_exe.str_at(o + 48) as String).contains("{v}")
+	return _named_rows("Band of Accuria", JEWEL_ROW, [0, 16, 48], is_jewel)
 
 
 func _amulets() -> Array:
 	return _named_rows("Mark of Fordring", AMULET_ROW, [0, 16, 32])
 
 
-## Rows of (id, name, icon) at +0, +16, +32.
-func _named_rows(anchor: String, stride: int, required: Array[int]) -> Array:
+## Rows of (id, name, icon) at +0, +16, +32; `each` (if given) must hold for every row as well.
+func _named_rows(anchor: String, stride: int, required: Array[int], each: Callable = Callable()) -> Array:
 	var out := []
-	for o in _rows(anchor, stride, required):
+	for o in _rows(anchor, stride, required, Callable(), each):
 		out.append({"id": _exe.str_at(o), "name": _exe.str_at(o + 16), "icon": _exe.str_at(o + 32)})
 	return out
 
@@ -420,11 +422,13 @@ func _anchor_row(text: String, field: int, check: Callable = Callable()) -> int:
 	return -1
 
 
-## Offsets of consecutive rows from the anchor row on, while each has strings at `required`.
-func _rows(anchor: String, stride: int, required: Array[int], check: Callable = Callable()) -> Array[int]:
+## Offsets of consecutive rows from the anchor row on, while each has strings at `required`; `each` (if given)
+## must hold for every row as well.
+func _rows(anchor: String, stride: int, required: Array[int], check: Callable = Callable(),
+		each: Callable = Callable()) -> Array[int]:
 	var out: Array[int] = []
 	var o := _anchor_row(anchor, 16, check)
-	while o != -1 and _has_strs(o, required):
+	while o != -1 and _has_strs(o, required) and (each.is_null() or each.call(o)):
 		out.append(o)
 		o += stride
 	return out
