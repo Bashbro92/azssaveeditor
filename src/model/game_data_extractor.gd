@@ -13,7 +13,8 @@ const ABILITY_ROW := 120
 const CLASS_ROW := 144
 const TREE_ROW := 64
 const TREE_CLASS_HEADER := 8  # sits between each class's three trees
-const TALENT_ROW := 104
+const TALENT_ROW := 120  # from 0.104.0: the required talent (+0) and another that does instead (+16), then the old row
+const TALENT_ROW_0103 := 104  # until 0.103.1: id, name, icon, effects, description, required talent, packed
 const JEWEL_ROW := 72
 const AMULET_ROW := 80
 const STR := 16  # size of a `&str`
@@ -202,12 +203,14 @@ func _talent_trees(count: int) -> Array:
 		return trees
 	var o := start
 	var limit := start + count * (TREE_ROW + TREE_CLASS_HEADER) + TREE_ROW
+	var first := _exe.slice_at(start + 48)[0]
+	var row := TALENT_ROW if first != -1 and _exe.u64(first) == 0 else TALENT_ROW_0103  # the first talent requires none
 	while trees.size() < count and o < limit:
 		if _has_strs(o, [0, 16, 32]):
 			var talents := []
 			var t := _exe.slice_at(o + 48)
 			for i in range(t[1] if t[0] != -1 else 0):
-				talents.append(_talent(t[0] + i * TALENT_ROW))
+				talents.append(_talent(t[0] + i * row) if row == TALENT_ROW else _talent_0103(t[0] + i * row))
 			trees.append({"name": _exe.str_at(o), "icon": _exe.str_at(o + 32), "talents": link_exclusions(talents)})
 			o += TREE_ROW
 		else:
@@ -215,15 +218,38 @@ func _talent_trees(count: int) -> Array:
 	return trees
 
 
+## A talent row from 0.104.0: the required talent (+0) and another that does instead (+16, Legion Gate's: Soul
+## Devourer or Soul Link), then id, name, icon, effects, description and the packed row, column, ranks and
+## choice flag (+112).
 func _talent(o: int) -> Dictionary:
-	var packed := _exe.u32(o + 96)
-	var description: Variant = _exe.str_at(o + 64)
-	var requires: Variant = _exe.str_at(o + 80)
+	var t := _talent_fields(o + 32, _exe.u32(o + 112))
+	t["requires"] = _str_or_none(o)
+	t["requires_or"] = _str_or_none(o + 16)
+	return t
+
+
+## A talent row until 0.103.1: id, name, icon, effects, description, the required talent (+80), packed (+96).
+func _talent_0103(o: int) -> Dictionary:
+	var t := _talent_fields(o, _exe.u32(o + 96))
+	t["requires"] = _str_or_none(o + 80)
+	t["requires_or"] = ""
+	return t
+
+
+## The fields both layouts share, from the id at `o` on: id, name, icon, description (+64), and from `packed` the
+## row, column, max ranks and (0.104.0, byte 3) whether it's one choice of its row (Soul Devourer, Soul Link).
+func _talent_fields(o: int, packed: int) -> Dictionary:
 	return {
 		"id": _exe.str_at(o), "name": _exe.str_at(o + 16), "icon": _exe.str_at(o + 32),
-		"description": description if description != null else "", "requires": requires if requires != null else "",
-		"row": packed & 0xFF, "col": (packed >> 8) & 0xFF, "ranks": (packed >> 16) & 0xFF,
+		"description": _str_or_none(o + 64), "row": packed & 0xFF, "col": (packed >> 8) & 0xFF,
+		"ranks": (packed >> 16) & 0xFF, "exclusive": packed >> 24 == 1,
 	}
+
+
+## The `&str` at offset o, or "" if there is none.
+func _str_or_none(o: int) -> String:
+	var s: Variant = _exe.str_at(o)
+	return s if s != null else ""
 
 
 ## The embedded English localisation object (a flat JSON object, keys in the game's order).
@@ -274,18 +300,19 @@ static func later_achievement_texts(keys: Array) -> Array[String]:
 	return out
 
 
-## Sets `excludes` (talent ids) on talents whose description says another talent of the tree
-## can't be learned with them, e.g. the two Feral capstones.
+## Sets `excludes` (talent ids) on each talent: the talents of its tree the game won't learn along with it
+## (0.104.0 0x8b025a0, the capstone check 0x87e4bb0 in 0.100.1). A capstone (row 6) rules out every other capstone
+## of the tree, such as the druid's Dire Bear Form and Cat Form; a choice (`exclusive`, 0.104.0) every other choice
+## of its row, such as the warlock's Soul Devourer and Soul Link.
 static func link_exclusions(tree: Array) -> Array:
-	var by_name := {}
-	for t: Dictionary in tree:
-		by_name[t["name"]] = t["id"]
-	var pattern := RegEx.create_from_string("You can't also learn (.+?)\\.")
 	for t: Dictionary in tree:
 		var excludes: Array[String] = []
-		for m in pattern.search_all(t.get("description", "")):
-			if by_name.has(m.get_string(1)):
-				excludes.append(by_name[m.get_string(1)])
+		var row := int(t.get("row", 0))
+		if row == SaveProgress.CAPSTONE_ROW or t.get("exclusive", false):
+			for other: Dictionary in tree:
+				if other["id"] != t["id"] and int(other.get("row", 0)) == row \
+						and (row == SaveProgress.CAPSTONE_ROW or other.get("exclusive", false)):
+					excludes.append(other["id"])
 		t["excludes"] = excludes
 	return tree
 

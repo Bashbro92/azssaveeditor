@@ -84,14 +84,17 @@ func test_templated_achievements() -> void:
 	assert_eq(got[3]["group"], "Zones")
 
 
-func test_links_exclusive_talents_both_ways() -> void:
+func test_links_capstones_and_choices_both_ways() -> void:
 	var tree := GameDataExtractor.link_exclusions([
-		{"id": "bear", "name": "Dire Bear Form", "description": "Capstone. You can't also learn Cat Form."},
-		{"id": "cat", "name": "Cat Form", "description": "Capstone. You can't also learn Dire Bear Form."},
-		{"id": "hide", "name": "Thick Hide", "description": ""},
-		{"id": "odd", "name": "Odd", "description": "You can't also learn Missing."},
+		{"id": "bear", "row": 6, "col": 0},
+		{"id": "cat", "row": 6, "col": 2},
+		{"id": "hide", "row": 2, "col": 0},
+		{"id": "pick1", "row": 2, "col": 1, "exclusive": true},
+		{"id": "pick2", "row": 2, "col": 2, "exclusive": true},
+		{"id": "lone", "row": 4, "col": 1, "exclusive": true},
 	])
-	assert_eq(tree.map(func(t: Dictionary) -> Array: return t["excludes"]), [["cat"], ["bear"], [], []])
+	assert_eq(tree.map(func(t: Dictionary) -> Array: return t["excludes"]),
+			[["cat"], ["bear"], [], ["pick2"], ["pick1"], []])
 
 
 # ---------------------------------------------------------------- Windows (PE32+)
