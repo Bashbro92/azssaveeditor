@@ -25,7 +25,7 @@ func test_tables() -> void:
 	assert_eq(game.abilities.size(), 112)
 	assert_eq(game.jewels.size(), 22)
 	assert_eq(game.amulets.size(), 17)
-	assert_eq(game.achievements.size(), 72)
+	assert_eq(game.achievements.size(), 73)
 	assert_eq(game.trees_for_class("warrior")[0]["name"], "Arms")
 	assert_eq(game.class_by_wow_id(11)["spell_pool"][-1], "shred")
 	assert_eq(game.item_name(101010), "Valor Helm")
@@ -45,9 +45,10 @@ func test_perks_tabards_and_companion_looks() -> void:
 	assert_eq(game.tabards.size(), 20)
 	assert_eq(game.tabards[0]["id"], 90001)
 	assert_eq(game.tabards.filter(func(t: Dictionary) -> bool: return t["unlock"] == "").size(), 14, "bought ones")
-	assert_eq(game.companion_looks.size(), 12)
+	assert_eq(game.companion_looks.size(), 13)
 	assert_eq([game.companion_looks[0]["id"], game.companion_looks[0]["unlock"]], ["squirrel", ""])
-	assert_eq(game.companion_looks[-1]["unlock"], "feat:endless40")
+	assert_eq([game.companion_looks[-1]["id"], game.companion_looks[-1]["unlock"]], ["sapphiron", "feat:nou"],
+			"0.103.1")
 
 
 func test_achievements_come_with_icons() -> void:
@@ -59,6 +60,8 @@ func test_achievements_come_with_icons() -> void:
 	assert_eq(by_key["count:kills100k"]["icon"], "INV_Sword_39", "a literal the linker shares")
 	assert_eq(by_key["pieces:100"]["description"], "Collect 100 pieces of gear, of any class.")
 	assert_eq(by_key["count:bosses100"]["description"], "Slay 100 bosses.")
+	assert_eq([by_key["feat:nou"]["name"], by_key["feat:nou"]["icon"], by_key["feat:nou"]["group"]],
+			["no u", "Spell_Frost_FrostBolt02", "Feats"], "0.103.1, after the enemy names")
 
 
 func test_feral_capstones_exclude_each_other() -> void:

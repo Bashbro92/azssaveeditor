@@ -48,7 +48,7 @@ func test_sample_reseals_byte_for_byte() -> void:
 
 
 ## Same totals as the generated "100%" save that was verified in game (2026-10-15), except that
-## achievements now cover all 72 keys found in the exe (the verified save had 39 of them), game 0.94.1
+## achievements now cover all 73 keys found in the exe (the verified save had 39 of them), game 0.94.1
 ## added the druid spell Shred and with it one legendary codex entry (140 -> 141), and 0.96.0 three zones
 ## and the PvP tier (415 -> 498 pieces), with zones opened by `open|` lines in place of `unlock|`.
 func test_fill_all_matches_verified_save() -> void:
@@ -57,7 +57,7 @@ func test_fill_all_matches_verified_save() -> void:
 	var text := p.to_text()
 	assert_eq(p.item_count(), 498, "items")
 	assert_eq(_lines(text, "seen")[0][1].split(",").size(), 141, "codex entries")
-	assert_eq(p.achievements().size(), 72, "achievements")
+	assert_eq(p.achievements().size(), 73, "achievements")
 	var wins := 0
 	for r in _lines(text, "beat"):
 		wins += r[2].split(",").size()

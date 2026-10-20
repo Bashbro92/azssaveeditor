@@ -60,6 +60,14 @@ func test_ignores_what_follows_the_builder() -> void:
 	assert_eq([got["Thrifty"]["key"], got["Thrifty"]["icon"]], ["feat:thrifty", "INV_Box_01"])
 
 
+func test_later_achievements_are_the_texts_after_the_last_enemy_name() -> void:
+	var keys := ["Fully Talented", "Jan", "enemy.1414", "enemy.1415", "Sapphiron", "no u",
+			"Slay Sapphiron with a Frostbolt as the killing blow."]
+	assert_eq(GameDataExtractor.later_achievement_texts(keys),
+			["Sapphiron", "no u", "Slay Sapphiron with a Frostbolt as the killing blow."] as Array[String], "0.103.1")
+	assert_eq(GameDataExtractor.later_achievement_texts(["Fully Talented", "Jan"]), [] as Array[String])
+
+
 func test_drops_achievements_without_a_key() -> void:
 	assert_eq(_assemble(["Slaughterhouse", "Slay 2,500 enemies in one run."]), {})
 

@@ -251,11 +251,26 @@ func _achievements(text: Dictionary, classes: Array, zones: Array) -> Array:
 	var block: Array[String] = []
 	block.assign(keys.slice(first, last))
 	block.append_array(TALENT_TEXTS)
+	block.append_array(later_achievement_texts(keys))
 	var fixed := assemble_achievements(_exe.lea_strings(refs[0], ACHIEVEMENTS_CODE_SPAN), block)
 	return fixed + templated_achievements(classes, zones, _zone_icons(zones.size()))
 
 
 # ---------------------------------------------------------------- pure helpers (unit-tested)
+
+## Achievement names and descriptions the game added after the Fully Talented … Jan block: the text keys after the
+## last enemy name id (0.103.1: "no u" and its description, after `enemy.1415`).
+static func later_achievement_texts(keys: Array) -> Array[String]:
+	var enemy := RegEx.create_from_string("^enemy\\.\\d+$")
+	var last := -1
+	for i in range(keys.size()):
+		if enemy.search(keys[i]):
+			last = i
+	var out: Array[String] = []
+	if last >= 0:
+		out.assign(keys.slice(last + 1))
+	return out
+
 
 ## Sets `excludes` (talent ids) on talents whose description says another talent of the tree
 ## can't be learned with them, e.g. the two Feral capstones.
