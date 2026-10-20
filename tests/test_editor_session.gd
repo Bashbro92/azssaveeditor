@@ -58,7 +58,7 @@ func test_saves_what_the_game_would_write() -> void:
 	var out := TMP + "f.sav"
 	assert_ok(s.save_as(out))
 	var plain := SaveCodec.unseal(KEY.to_ascii_buffer(), FileAccess.get_file_as_string(out))
-	assert_eq(plain.value, "talent|1|80|t1:1\nbeat|1|meadow,cave\n")
+	assert_eq(plain.value, "open|1|cave\ntalent|1|80|t1:1\nbeat|1|meadow,cave\n", "the zones after won ones open")
 
 
 func test_export_name_is_the_games() -> void:

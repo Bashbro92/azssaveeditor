@@ -17,6 +17,8 @@ extends RefCounted
 
 const MAX_RARITY := 4  # 0 Common … 4 Legendary
 const MIN_ZONES_OPEN := 1
+## The zone-unlock repair's cap on zones open (0.102.3 on; an immediate in the reader, exe 0.103.1 0x8a980ec).
+const REPAIR_MAX_ZONES_OPEN := 12
 ## The zones in the game's order (0.96.0 on): the reader's zone-id switch and the writer's zone table have them
 ## built in. The editor passes the zones read from the exe, which are the same.
 const ZONE_ORDER: Array[String] = ["elwynn", "duskwood", "wsg", "ungoro", "ab", "feralas", "arena", "sm", "av", "brm",
@@ -834,6 +836,17 @@ func _read_open(r: PackedStringArray) -> void:
 		_unlocked[class_id] = maxi(_unlocked.get(class_id, 0), count)
 
 
+## The zone-unlock repair (0.102.3; profile reader 0x8a98088-0x8a98179 in 0.103.1): after the lists are read, each
+## beaten (class, zone index z) opens the zone after it, so the class has at least min(z + 2, 12) zones open; a class
+## without an open record gets one, after the others. It undoes an older build's save that locked every class back to
+## the first zone, and opens Naxxramas to a class that beat the Gates of Ahn'Qiraj before Naxxramas came. The count
+## also stays within the zones the save is read with (the writer names the last of them either way).
+func _open_after_beaten() -> void:
+	for entry: Array in _beaten:
+		var count := mini(mini(entry[1] + 2, REPAIR_MAX_ZONES_OPEN), _zones.size())
+		_unlocked[entry[0]] = maxi(_unlocked.get(entry[0], 0), count)
+
+
 ## equip|class|slot:id,… and look|class|slot:value,… (3 fields): a class's gear record, made by its first line of
 ## either kind; a later line sets its slots over the earlier ones. A slot past 18 is skipped.
 func _read_gear(r: PackedStringArray) -> void:
@@ -949,6 +962,7 @@ func _read_lists(records: Array[PackedStringArray]) -> void:
 		_seen.append([id, seen[id]])
 	_achievements.sort()
 	_beaten.sort()
+	_open_after_beaten()
 	dated.sort()
 	for pair: Array in dated:  # a key twice keeps its earliest time
 		if not _achieved_at.has(pair[0]):

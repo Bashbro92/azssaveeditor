@@ -2,7 +2,7 @@ class_name ZonesPanel
 extends EditorPanel
 ## Per class: how many zones are open, and which zones were won. All classes, or one class, can be
 ## opened, won or cleared at once; winning every zone also opens every zone, clearing goes back to
-## the first zone only.
+## the first zone only. Like the game, reading a save opens the zone after each won one (0.102.3).
 
 
 func build() -> void:
@@ -14,8 +14,8 @@ func build() -> void:
 	for c in session.game.classes:
 		class_ids.append(int(c["wow_class_id"]))
 
-	content.add_child(_label("Zones open per class (%d to %d), and which zones each class has won." \
-			% [SaveProgress.MIN_ZONES_OPEN, zone_count]))
+	content.add_child(_label(("Zones open per class (%d to %d), and which zones each class has won. When the game "
+			+ "loads the save, it opens the zone after each won one.") % [SaveProgress.MIN_ZONES_OPEN, zone_count]))
 	var bar := HBoxContainer.new()
 	bar.add_child(_label("All classes:"))
 	bar.add_child(_button("Open all", func() -> void: _apply_bulk(func() -> void:

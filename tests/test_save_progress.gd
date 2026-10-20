@@ -111,7 +111,8 @@ func test_an_older_save_comes_out_as_the_game_rewrites_it() -> void:
 			+ "future|x\n" \
 			+ "hero|1|1|1|4,5,2,4,0")
 	assert_eq(p.to_text(), "pick|1|1|1|duskwood|Hero|4,5,2,4,0|100,100,100,100\n" \
-			+ "open|1|duskwood\n" \
+			+ "open|1|wsg\n" \
+			+ "open|3|duskwood\n" \
 			+ "items|101000,101200\n" \
 			+ "seen|legendary:cleave=4,ring=3\n" \
 			+ "ach|class:warrior,count:gold5k\n" \
@@ -126,7 +127,26 @@ func test_reads_the_games_beat_lines_one_zone_each() -> void:
 	var p := SaveProgress.from_text("beat|4|cave\nbeat|1|cave,meadow\nbeat|1|meadow\nbeat|1|nowhere,cave\n", zones)
 	assert_true(p.is_beaten(1, "meadow") and p.is_beaten(1, "cave") and p.is_beaten(4, "cave"))
 	assert_false(p.is_beaten(4, "meadow"))
-	assert_eq(p.to_text(), "beat|1|meadow,cave\nbeat|4|cave\n", "one line a class, by class then zone order")
+	assert_eq(p.to_text(), "open|1|cave\nopen|4|cave\nbeat|1|meadow,cave\nbeat|4|cave\n",
+			"one line a class, by class then zone order; the zone after a beaten one opens (0.102.3)")
+
+
+func test_each_beaten_zone_opens_the_next_as_the_save_is_read() -> void:
+	var p := SaveProgress.from_text("open|1|elwynn\nopen|3|naxx\nbeat|3|elwynn\nbeat|1|ab\nbeat|9|aq\nbeat|11|naxx")
+	assert_eq(p.zones_unlocked(1), 6, "locked back to Elwynn Forest by an older build: Feralas, after Arathi, opens")
+	assert_eq(p.zones_unlocked(3), 12, "a larger record stays")
+	assert_eq(p.zones_unlocked(9), 12, "Gates of Ahn'Qiraj beaten: Naxxramas opens")
+	assert_eq(p.zones_unlocked(11), 12, "no more than the twelve zones")
+	assert_eq(p.to_text().split("beat|")[0], "open|1|feralas\nopen|3|naxx\nopen|9|naxx\nopen|11|naxx\n",
+			"a class without an open record gets one after the others")
+	assert_eq(SaveProgress.from_text(p.to_text()).to_text(), p.to_text(), "repaired once, it reads back the same")
+
+
+func test_the_repair_opens_zones_only_as_the_save_is_read() -> void:
+	var p := SaveProgress.from_text("open|1|ab\nbeat|1|ab")
+	p.set_zones_unlocked(1, 1)
+	assert_eq(p.zones_unlocked(1), 1, "the editor keeps what is set; the game repairs it when it reads the save")
+	assert_eq(SaveProgress.from_text(p.to_text()).zones_unlocked(1), 6)
 
 
 func test_stat_is_written_only_when_one_is_not_zero() -> void:
