@@ -3,6 +3,7 @@ extends TestCase
 ## AZS_EXE.
 
 var game: GameData
+var version: String
 
 
 func before_all() -> void:
@@ -17,17 +18,26 @@ func before_all() -> void:
 		skip(loaded.error)
 		return
 	game = loaded.value
+	version = VersionFinder.find_version(bytes.value)
+
+
+## Whether the game is 0.104.0 or later (the Demonology rework, Demonic Empowerment).
+func _demon_army() -> bool:
+	var parts := version.split(".")
+	return parts.size() == 3 and (parts[0].to_int() > 0 or parts[1].to_int() >= 104)
 
 
 func test_tables() -> void:
 	assert_eq(game.classes.size(), 9)
 	assert_eq(game.zone_ids().size(), 12)
-	assert_eq(game.abilities.size(), 112)
+	assert_eq(game.abilities.size(), 113 if _demon_army() else 112, "0.104.0 added Demonic Empowerment")
 	assert_eq(game.jewels.size(), 22)
 	assert_eq(game.amulets.size(), 17)
 	assert_eq(game.achievements.size(), 73)
 	assert_eq(game.trees_for_class("warrior")[0]["name"], "Arms")
 	assert_eq(game.class_by_wow_id(11)["spell_pool"][-1], "shred")
+	if _demon_army():
+		assert_eq(game.class_by_wow_id(9)["spell_pool"][-1], "demonic_empowerment")
 	assert_eq(game.item_name(101010), "Valor Helm")
 	assert_eq(game.item_name(104940), "Kingsfall")
 	assert_eq(game.item_name(101050), "Field Marshal's Helm", "PvP, as saved")
@@ -73,22 +83,61 @@ func test_feral_capstones_exclude_each_other() -> void:
 	assert_eq(excludes, {"leader_of_pack": ["cat_form"], "cat_form": ["leader_of_pack"]})
 
 
-## Prerequisites are the milestones: a 1-rank talent of the same tree in a lower row.
-func test_talent_prerequisites_are_lower_milestones() -> void:
+## Prerequisites are talents of the same tree in a lower row (until 0.103.1 always a 1-rank milestone; from 0.104.0
+## Soul Devourer needs the 5-rank Demonic Familiar, and Legion Gate either companion).
+func test_talent_prerequisites_are_lower_in_their_tree() -> void:
 	var required := 0
 	for tree in game.talent_trees:
 		var by_id := {}
 		for t: Dictionary in tree["talents"]:
 			by_id[t["id"]] = t
 		for t: Dictionary in tree["talents"]:
+			for id: String in [t["requires"], t["requires_or"]]:
+				if id == "":
+					continue
+				required += 1
+				assert_true(by_id.has(id), "%s requires %s of its tree" % [t["id"], id])
+				var needed: Dictionary = by_id.get(id, {})
+				if not _demon_army():
+					assert_eq(needed.get("ranks"), 1, id)
+				assert_true(int(needed.get("row", 99)) < int(t["row"]), "%s is below %s" % [id, t["id"]])
 			if t["requires"] == "":
-				continue
-			required += 1
-			assert_true(by_id.has(t["requires"]), "%s requires %s of its tree" % [t["id"], t["requires"]])
-			var needed: Dictionary = by_id.get(t["requires"], {})
-			assert_eq(needed.get("ranks"), 1, t["requires"])
-			assert_true(int(needed.get("row", 99)) < int(t["row"]), "%s is below %s" % [t["requires"], t["id"]])
+				assert_eq(t["requires_or"], "", "%s has a second prerequisite only with a first" % t["id"])
 	assert_true(required > 0, "some talents have a prerequisite")
+
+
+## 0.104.0's Demonology: the companion choice at 10 points, Legion Gate after either companion, and two capstones.
+func test_demonology_choices() -> void:
+	if not _demon_army():
+		return
+	var demonology: Array = game.trees_for_class("warlock")[1]["talents"]
+	var by_id := {}
+	for t: Dictionary in demonology:
+		by_id[t["id"]] = t
+	assert_eq(demonology.size(), 14)
+	assert_eq(by_id["soul_devourer"]["excludes"], ["soul_link"])
+	assert_eq(by_id["soul_link"]["excludes"], ["soul_devourer"])
+	assert_eq(by_id["pact_of_the_annihilan"]["excludes"], ["butcher"])
+	assert_eq([by_id["legion_gate"]["requires"], by_id["legion_gate"]["requires_or"]], ["soul_devourer", "soul_link"])
+	var trees: Array = game.trees_for_class("warlock")
+	var p := SaveProgress.from_text("")
+	p.max_tree(9, demonology)
+	var kept := SaveProgress.sanitized_ranks(trees, p.spec_ranks(9), SaveProgress.MAX_TALENT_POINTS)
+	assert_eq(kept.size(), p.spec_ranks(9).size(), "a maxed Demonology is legal")
+	assert_eq(p.talent_rank(9, "soul_link") + p.talent_rank(9, "butcher"), 0, "one companion, one capstone")
+
+
+## A warlock's 0.103.1 Demonology record (43 points) as 0.104.0 reads it: its points are refunded but for the talents
+## the new tree kept, as far as their new rows allow. The same record reads unchanged with 0.103.1.
+func test_old_demonology_points_are_refunded() -> void:
+	const OLD := "demonic_embrace:5,fel_intellect:5,fel_stamina:3,imp_health_funnel:5,summon_imp:1,unholy_power:5," \
+			+ "imp_succubus:3,master_demonologist:5,demonic_pact:1,demonic_knowledge:3,imp_enslave:3,demonic_sacrifice:3,felguard:1"
+	var p := SaveProgress.from_text("talent|9|%d|%s\n" % [SaveProgress.FULL_TALENT_XP, OLD])
+	p.relearn_talents(func(c: int) -> Array: return game.trees_for_class(game.class_by_wow_id(c).get("id", "")))
+	if _demon_army():
+		assert_eq(p.spec_ranks(9), [["demonic_embrace", 5], ["fel_stamina", 3], ["unholy_power", 5]])
+	else:
+		assert_eq(p.talent_points_spent(9), 43)
 
 
 ## Every real tree fits the talent budget, so "max tree" fills it completely on a fresh class,
