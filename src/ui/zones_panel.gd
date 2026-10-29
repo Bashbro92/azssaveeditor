@@ -1,8 +1,8 @@
 class_name ZonesPanel
 extends EditorPanel
-## Per class: how many zones are open, and which zones were won. All classes, or one class, can be
-## opened, won or cleared at once; winning every zone also opens every zone, clearing goes back to
-## the first zone only. Like the game, reading a save opens the zone after each won one (0.102.3).
+## Per class: how many zones are open, which zones were won, and the highest Heroic tier beaten in each zone.
+## All classes, or one class, can be opened, won, difficulty-unlocked or cleared at once. Like the game, reading a
+## save opens the zone after each normal win; Heroic V in `hbeat` makes every difficulty available.
 
 
 func build() -> void:
@@ -24,6 +24,9 @@ func build() -> void:
 	bar.add_child(_button("Win all", func() -> void: _apply_bulk(func() -> void:
 		for id in class_ids:
 			p.win_all_zones(id))))
+	bar.add_child(_button("Unlock all difficulties", func() -> void: _apply_bulk(func() -> void:
+		for id in class_ids:
+			p.unlock_all_zone_difficulties(id))))
 	bar.add_child(_button("Clear all", func() -> void: _apply_bulk(func() -> void:
 		for id in class_ids:
 			p.clear_zones(id))))
@@ -52,3 +55,23 @@ func build() -> void:
 			_apply_bulk(func() -> void: p.clear_zones(class_id))))
 		grid.add_child(row_buttons)
 	content.add_child(grid)
+
+	content.add_child(_label("Highest Heroic tier beaten per zone (0 = none, 5 = Heroic I–V unlocked):"))
+	var heroic_grid := GridContainer.new()
+	heroic_grid.columns = 1 + zone_count + 1
+	heroic_grid.add_theme_constant_override("h_separation", 10)
+	heroic_grid.add_child(_label("Class", 120))
+	for z in zones:
+		heroic_grid.add_child(_label(z["name"]))
+	heroic_grid.add_child(_label("Difficulties"))
+	for c in session.game.classes:
+		var class_id := int(c["wow_class_id"])
+		heroic_grid.add_child(_label(c["name"], 120))
+		for zone_id in zone_ids:
+			heroic_grid.add_child(_spin(p.heroic_level(class_id, zone_id), SaveProgress.MAX_HEROIC_LEVEL,
+					func(v: int) -> void: p.set_heroic_level(class_id, zone_id, v), 58, 0))
+		var row_buttons := HBoxContainer.new()
+		row_buttons.add_child(_button("Unlock all", func() -> void:
+			_apply_bulk(func() -> void: p.unlock_all_zone_difficulties(class_id))))
+		heroic_grid.add_child(row_buttons)
+	content.add_child(heroic_grid)

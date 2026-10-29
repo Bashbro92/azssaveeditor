@@ -2,7 +2,11 @@
 
 This is a save editor for **Azeroth Survivors**, a fan-made, survivors-style game set in vanilla WoW. It uses Godot 4.7 with the Compatibility renderer and is written in GDScript.
 
-**Latest tested game version: 0.104.0**, Windows and Linux builds. The top bar shows the version of the game you chose.
+**Current compatibility: 0.129.0 and later**, Windows, Linux and web saves. The top bar shows the version of the game files you chose.
+
+This fork adds current-save support for Heroic I–V zone progress, per-class upgrade marks and five-star equipment
+progress. The Collection tab can maximize marks or stars for one class or all classes, and **Fill 100%** includes
+all three current progression systems.
 
 Since 0.98.0 the game keeps three talent specs per class (`spec|` save lines). The editor reads and edits all three, and can switch which one is lit, keeping the class's `talent|` line in step as the game does. No save line changed from 0.100.1 to 0.103.1. From 0.102.3 the game opens the zone after each won one when it reads a save, and the editor does the same. 0.103.1 adds the no u achievement (73 in all) and the Sapphiron companion look it unlocks; both show up in the editor. 0.104.0 rebuilds the warlock's Demonology tree: the editor reads the new talents, their companion choice and capstones, and Legion Gate's two prerequisites (either companion). The game refunds the old Demonology points by reading the save against the new tree, and the editor reads it the same way: talents that are gone are dropped, and those the new tree kept stay only as far as their new rows allow. No save line changed from 0.103.1 to 0.104.0.
 
@@ -22,9 +26,11 @@ This is an unofficial tool for your own single-player saves. It bypasses the gam
 2. **Open save…** loads a `.sav` exported from the game (Options → Saves → Export Save), one of the game's hourly backups, or the game's own `characters.txt` (see [Where the game keeps its save](#where-the-game-keeps-its-save)).
 3. Edit in the tabs, or use **Fill 100%** to unlock everything:
    - **Overview:** heroes and lifetime stats;
-   - **Zones:** zones open and won per class;
+   - **Zones:** zones open and won per class, plus the highest Heroic difficulty beaten in every zone. **Unlock all
+     difficulties** writes Heroic V for every class and zone;
    - **Talents:** talent XP and ranks, for each of a class's three specs. The lit spec, shown in gold, is the one runs play with; **Make lit** switches to the shown spec as the game does, relearning its ranks within the points earned. Talents that exclude each other, such as the druid's Dire Bear Form and Cat Form or the warlock's Soul Devourer and Soul Link, are never learned together;
-   - **Collection:** gear per class and tier;
+   - **Collection:** gear per class and tier, each class's mark balance, and bulk five-star upgrades for one class
+     or all classes;
    - **Codex:** rings, trinkets, amulets and legendary amulets;
    - **Achievements;**
    - **Perks:** perk ranks and resets, tabards bought with perk points, and the two companions' looks.
@@ -32,6 +38,9 @@ This is an unofficial tool for your own single-player saves. It bypasses the gam
 5. In the game, import it with **Options → Saves → Import Save**. The game lists the `.sav` files of its `Saves` folder, and keeps your previous save as `characters.before-import.txt` when importing. Import only takes sealed saves (`RSE1:`), which is what the editor writes.
 
 The editor reads a save as the game reads it and writes it as the game writes it: the same lines in the same order, lists sorted, one `beat` line and one `open` line per class, `stat` only when a count isn't 0, and only dated achievements in `achat`. A save the game wrote comes back byte for byte; an older save (0.94 or 0.95 `unlock` lines, say) comes out as the game would rewrite it. Like the game, the editor opens the zone after each won one (0.102.3 on), drops lines it doesn't know, relearns talents within the points their XP earns, and keeps the last pick, equipped gear and transmog looks as they are. Hero looks aren't checked against what a race offers; the game does that when it loads the save.
+
+Current-build records for co-op clears, purchased races, pity counters and weapon glows are preserved. Marks and
+gear stars are editable through Collection, and Heroic difficulty progress is fully editable through Zones.
 
 ## Where the game keeps its save
 

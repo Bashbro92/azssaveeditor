@@ -10,14 +10,14 @@ const SAMPLE := "pick|1|1|1|meadow|Hero|4,5,2,4,0|100,100,100,100\n" \
 		+ "seen|legendary:cleave=4,ring=3\n" \
 		+ "ach|class:warrior,count:gold5k\n" \
 		+ "achat|class:warrior=100,count:gold5k=200\n" \
-		+ "stat|kills=10,gold=20,guardians=0,bosses=0,runs=0,wins=0,caches=0\n" \
+		+ "stat|kills=10,gold=20,guardians=0,bosses=0,runs=0,wins=0,caches=0,marks=0\n" \
 		+ "beat|1|meadow\n" \
 		+ "perk|companion:1,rerolls:2\n" \
 		+ "tabard|90011,90018\n" \
 		+ "pets|rabbit,owl\n" \
 		+ "resets|1\n" \
 		+ "hero|1|1|1|4,5,2,4,0\n"
-const NO_STATS := ",guardians=0,bosses=0,runs=0,wins=0,caches=0"
+const NO_STATS := ",guardians=0,bosses=0,runs=0,wins=0,caches=0,marks=0"
 
 var zones: Array[String] = ["meadow", "cave"]
 
@@ -94,6 +94,38 @@ func test_unknown_lines_are_dropped_as_the_game_drops_them() -> void:
 	assert_eq(p.to_text(), SAMPLE)
 
 
+func test_current_unedited_records_are_preserved() -> void:
+	var modern := "coopbeat|elwynn\nraces|1:2\nmarks|125\nstars|101000:3\npity|elwynn:2\nglow|1|fiery\n"
+	var p := SaveProgress.from_text(modern + "future|dropped\n", zones)
+	assert_eq(p.to_text(), modern)
+
+
+func test_current_marks_and_stars_are_read_and_edited() -> void:
+	var p := SaveProgress.from_text("marks|1|125\nmarks|4|4294967295\nstars|101000:3,101010:9\n", zones)
+	assert_eq(p.class_marks(1), 125)
+	assert_eq(p.class_marks(4), SaveProgress.MAX_CLASS_MARKS)
+	assert_eq(p.item_stars(101000), 3)
+	assert_eq(p.item_stars(101010), SaveProgress.MAX_ITEM_STARS)
+	p.set_class_marks(1, SaveProgress.MAX_CLASS_MARKS)
+	p.set_item_stars(101000, SaveProgress.MAX_ITEM_STARS)
+	assert_eq(_lines(p.to_text(), "marks"), [
+		PackedStringArray(["marks", "1", "4294967295"]),
+		PackedStringArray(["marks", "4", "4294967295"]),
+	])
+	assert_eq(_lines(p.to_text(), "stars"), [PackedStringArray(["stars", "101000:5,101010:5"])])
+
+
+func test_bulk_marks_and_stars_cover_every_requested_entry() -> void:
+	var p := SaveProgress.from_text("", zones)
+	p.set_all_class_marks([1, 4] as Array[int])
+	p.set_item_stars_for(PackedInt32Array([101000, 101010, 104000]), SaveProgress.MAX_ITEM_STARS)
+	assert_eq(p.class_marks(1), SaveProgress.MAX_CLASS_MARKS)
+	assert_eq(p.class_marks(4), SaveProgress.MAX_CLASS_MARKS)
+	assert_eq(p.item_stars(101000), 5)
+	assert_eq(p.item_stars(104000), 5)
+	assert_eq(_lines(p.to_text(), "stars")[0][1], "101000:5,101010:5,104000:5")
+
+
 ## A save of an older build, or one an older editor wrote: unlock lines, one beat line per zone, a short stat line,
 ## unsorted lists, an undated achievement, an unknown line.
 func test_an_older_save_comes_out_as_the_game_rewrites_it() -> void:
@@ -153,7 +185,7 @@ func test_stat_is_written_only_when_one_is_not_zero() -> void:
 	var p := SaveProgress.from_text("stat|kills=0,gold=0\n", zones)
 	assert_eq(p.to_text(), "")
 	p.set_stat("caches", 5)
-	assert_eq(p.to_text(), "stat|kills=0,gold=0,guardians=0,bosses=0,runs=0,wins=0,caches=5\n")
+	assert_eq(p.to_text(), "stat|kills=0,gold=0,guardians=0,bosses=0,runs=0,wins=0,caches=5,marks=0\n")
 	p.set_stat("unknown", 5)
 	assert_eq(p.stat("unknown"), 0, "only the game's seven")
 
@@ -264,6 +296,29 @@ func test_bulk_beat() -> void:
 	assert_eq(_lines(p.to_text(), "beat"), [PackedStringArray(["beat", "1", "meadow,cave"])])
 	p.set_beaten_for(1, zones, false)
 	assert_true(_lines(p.to_text(), "beat").is_empty())
+
+
+func test_heroic_difficulties_round_trip_and_keep_highest() -> void:
+	var p := SaveProgress.from_text("hbeat|1|cave:2,meadow:1,cave:5,missing:4\n" \
+			+ "hbeat|4|meadow:9,cave:0\nhbeat|6|meadow:3\n", zones)
+	assert_eq(p.heroic_level(1, "meadow"), 1)
+	assert_eq(p.heroic_level(1, "cave"), 5)
+	assert_eq(p.heroic_level(4, "meadow"), SaveProgress.MAX_HEROIC_LEVEL, "values above V are clamped")
+	assert_eq(p.heroic_level(4, "cave"), 0, "zero is not stored")
+	assert_eq(p.heroic_level(6, "meadow"), 0, "unknown classes are skipped as the game skips them")
+	assert_eq(p.to_text(), "hbeat|1|meadow:1,cave:5\nhbeat|4|meadow:5\n")
+
+
+func test_unlock_and_clear_all_zone_difficulties() -> void:
+	var p := _progress()
+	p.unlock_all_zone_difficulties(1)
+	for zone in zones:
+		assert_eq(p.heroic_level(1, zone), SaveProgress.MAX_HEROIC_LEVEL)
+	assert_eq(_lines(p.to_text(), "hbeat"), [PackedStringArray(["hbeat", "1", "meadow:5,cave:5"])])
+	p.set_heroic_level(1, "cave", 3)
+	assert_eq(p.heroic_level(1, "cave"), 3)
+	p.clear_zones(1)
+	assert_true(_lines(p.to_text(), "hbeat").is_empty())
 
 
 func test_beat_toggle() -> void:
@@ -452,7 +507,12 @@ func test_fill_all() -> void:
 		assert_true(reread.hero_classes().has(class_id), "hero %d" % class_id)
 		assert_eq(reread.zones_unlocked(class_id), 2)
 		assert_true(reread.is_beaten(class_id, "meadow") and reread.is_beaten(class_id, "cave"))
+		assert_eq(reread.heroic_level(class_id, "meadow"), SaveProgress.MAX_HEROIC_LEVEL)
+		assert_eq(reread.heroic_level(class_id, "cave"), SaveProgress.MAX_HEROIC_LEVEL)
 		assert_eq(reread.talent_xp(class_id), SaveProgress.FULL_TALENT_XP)
+		assert_eq(reread.class_marks(class_id), SaveProgress.MAX_CLASS_MARKS)
+		for item_id in game.item_ids_for_class("warrior" if class_id == 1 else "rogue", class_id):
+			assert_eq(reread.item_stars(item_id), SaveProgress.MAX_ITEM_STARS)
 	assert_eq(reread.item_count(), (8 + 1) * 5 + (8 + 2) * 5)
 	assert_eq(reread.talent_rank(1, "t1"), 5, "spent ranks are kept")
 	assert_eq(reread.seen_rarity("amulet"), SaveProgress.MAX_RARITY)

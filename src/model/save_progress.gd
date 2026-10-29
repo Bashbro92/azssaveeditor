@@ -17,6 +17,11 @@ extends RefCounted
 
 const MAX_RARITY := 4  # 0 Common … 4 Legendary
 const MIN_ZONES_OPEN := 1
+## Heroic I–V. `hbeat` stores the highest tier beaten for each class and zone; beating a tier opens the next one.
+const MAX_HEROIC_LEVEL := 5
+## Gear upgrades and class mark balances in the current build.
+const MAX_ITEM_STARS := 5
+const MAX_CLASS_MARKS := 0xffffffff
 ## The zone-unlock repair's cap on zones open (0.102.3 on; an immediate in the reader, exe 0.103.1 0x8a980ec).
 const REPAIR_MAX_ZONES_OPEN := 12
 ## The zones in the game's order (0.96.0 on): the reader's zone-id switch and the writer's zone table have them
@@ -43,11 +48,15 @@ const FULL_TALENT_XP := MAX_TALENT_POINTS * _POINT_COST_BASE \
 		+ _POINT_COST_STEP * MAX_TALENT_POINTS * (MAX_TALENT_POINTS + 1) / 2
 ## The lifetime stats the stat line holds, in the order the game writes them (all seven, and only when one is not 0)
 ## and the only keys its reader knows (a key twice keeps the most).
-const STATS: Array[String] = ["kills", "gold", "guardians", "bosses", "runs", "wins", "caches"]
+const STATS: Array[String] = ["kills", "gold", "guardians", "bosses", "runs", "wins", "caches", "marks"]
 ## Lifetime stats that satisfy every count achievement.
 const FULL_STATS := {
 	"kills": 1000000, "gold": 50000, "guardians": 500, "bosses": 100, "runs": 100, "wins": 50, "caches": 100,
+	"marks": 10000,
 }
+## Current-build records are kept verbatim until their editor changes them. This preserves the exact text of
+## co-op clears, purchased races, marks, item stars, pity counters and weapon glows on unrelated edits.
+const CURRENT_PASSTHROUGH_KINDS: Array[String] = ["coopbeat", "races", "marks", "stars", "pity", "glow"]
 ## The classes the game has (its class mask 0xbbe: 1-5, 7-9, 11).
 const CLASSES: Array[int] = [1, 2, 3, 4, 5, 7, 8, 9, 11]
 ## The races each class may be, in the game's order (exe 0x9123490); the pick's sanitizer makes another race the
@@ -98,13 +107,19 @@ var _specs: Dictionary = {}
 var _seen: Array = []               # [id, rarity], sorted by id
 var _achievements: Array[String] = []  # sorted
 var _achieved_at: Dictionary = {}   # key -> unix time; written sorted by key
-var _stats: Array[int] = [0, 0, 0, 0, 0, 0, 0]  # in STATS order
+var _stats: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0]  # in STATS order
 var _beaten: Array = []             # [class, zone index], sorted
+var _heroic_beaten: Array = []      # [class, zone index, highest tier beaten (1–5)], sorted
+var _class_marks: Dictionary = {}   # class -> unspent marks (u32), in save order
+var _item_stars: Dictionary = {}    # item id -> 1–5 stars; 0 is omitted
 var _perks: Dictionary = {}         # perk id -> rank; written sorted by id
 var _tabards: Array[int] = []       # bought tabards, sorted
 var _companion_looks: Array[String] = []  # the pickup companions' chosen looks, slot 0 then 1
 var _heroes: Dictionary = {}        # class -> HeroRecord, in save order
 var _resets := 0                    # perk resets used
+var _preserved_lines: Array[String] = []  # current-build records in CURRENT_PASSTHROUGH_KINDS, kept as read
+var _marks_modified := false
+var _stars_modified := false
 var _modified := false
 
 
@@ -158,6 +173,14 @@ func to_text() -> String:
 			zones.append(_zones[_beaten[at][1]])
 			at += 1
 		out.append("beat|%d|%s" % [c, ",".join(zones)])
+	at = 0
+	while at < _heroic_beaten.size():  # hbeat|class|zone:tier,…; one line per class
+		var c: int = _heroic_beaten[at][0]
+		var levels := PackedStringArray()
+		while at < _heroic_beaten.size() and _heroic_beaten[at][0] == c:
+			levels.append("%s:%d" % [_zones[_heroic_beaten[at][1]], _heroic_beaten[at][2]])
+			at += 1
+		out.append("hbeat|%d|%s" % [c, ",".join(levels)])
 	if not _perks.is_empty():
 		var ids := _perks.keys()
 		ids.sort()
@@ -168,6 +191,7 @@ func to_text() -> String:
 		out.append("pets|" + ",".join(_companion_looks))
 	if _resets != 0:
 		out.append("resets|%d" % _resets)
+	_append_current_records(out)
 	for c: int in _heroes:
 		var h: HeroRecord = _heroes[c]
 		out.append("hero|%d|%d|%d|%s" % [c, h.race, h.gender, h.look_text()])
@@ -258,6 +282,44 @@ func set_beaten_for(class_id: int, zones: Array[String], beaten_now: bool) -> vo
 		set_beaten(class_id, zone, beaten_now)
 
 
+## Highest Heroic tier beaten by a class in a zone (0 means none). The current game stores 1–5.
+func heroic_level(class_id: int, zone: String) -> int:
+	var zone_index := _zones.find(zone)
+	for entry: Array in _heroic_beaten:
+		if entry[0] == class_id and entry[1] == zone_index:
+			return entry[2]
+	return 0
+
+
+## Sets the highest Heroic tier beaten. Tier 5 makes Heroic I–V available; 0 removes the record.
+func set_heroic_level(class_id: int, zone: String, level: int) -> void:
+	var zone_index := _zones.find(zone)
+	if zone_index < 0 or not CLASSES.has(class_id):
+		return
+	var kept := clampi(level, 0, MAX_HEROIC_LEVEL)
+	for i in range(_heroic_beaten.size()):
+		var entry: Array = _heroic_beaten[i]
+		if entry[0] == class_id and entry[1] == zone_index:
+			if entry[2] == kept:
+				return
+			if kept == 0:
+				_heroic_beaten.remove_at(i)
+			else:
+				entry[2] = kept
+			_modified = true
+			return
+	if kept > 0:
+		_heroic_beaten.append([class_id, zone_index, kept])
+		_heroic_beaten.sort()
+		_modified = true
+
+
+## Makes every Heroic tier available in every zone for one class.
+func unlock_all_zone_difficulties(class_id: int) -> void:
+	for zone in _zones:
+		set_heroic_level(class_id, zone, MAX_HEROIC_LEVEL)
+
+
 ## Every zone won by a class, which also opens every zone.
 func win_all_zones(class_id: int) -> void:
 	set_beaten_for(class_id, _zones, true)
@@ -267,6 +329,8 @@ func win_all_zones(class_id: int) -> void:
 ## No zone won by a class, back to only its first zone open.
 func clear_zones(class_id: int) -> void:
 	set_beaten_for(class_id, _zones, false)
+	for zone in _zones:
+		set_heroic_level(class_id, zone, 0)
 	set_zones_unlocked(class_id, MIN_ZONES_OPEN)
 
 
@@ -578,6 +642,53 @@ func item_count() -> int:
 	return _items.size()
 
 
+## Unspent equipment-upgrade marks for a class.
+func class_marks(class_id: int) -> int:
+	return _class_marks.get(class_id, 0)
+
+
+func set_class_marks(class_id: int, amount: int) -> void:
+	if not CLASSES.has(class_id):
+		return
+	var kept := clampi(amount, 0, MAX_CLASS_MARKS)
+	if class_marks(class_id) == kept and (_class_marks.has(class_id) or kept == 0):
+		return
+	if kept > 0:
+		_class_marks.erase(class_id)
+		_class_marks[class_id] = kept
+	else:
+		_class_marks.erase(class_id)
+	_marks_modified = true
+	_modified = true
+
+
+func set_all_class_marks(class_ids: Array[int], amount: int = MAX_CLASS_MARKS) -> void:
+	for class_id in class_ids:
+		set_class_marks(class_id, amount)
+
+
+## Permanent upgrade stars on an equipment item (0–5).
+func item_stars(item_id: int) -> int:
+	return _item_stars.get(item_id, 0)
+
+
+func set_item_stars(item_id: int, stars: int) -> void:
+	var kept := clampi(stars, 0, MAX_ITEM_STARS)
+	if item_stars(item_id) == kept:
+		return
+	if kept > 0:
+		_item_stars[item_id] = kept
+	else:
+		_item_stars.erase(item_id)
+	_stars_modified = true
+	_modified = true
+
+
+func set_item_stars_for(item_ids: PackedInt32Array, stars: int) -> void:
+	for item_id in item_ids:
+		set_item_stars(item_id, stars)
+
+
 ## What a class wears: WoW inventory slot (0-18) -> item id. Kept as read; the editor doesn't change it.
 func worn(class_id: int) -> Dictionary:
 	return _gear[class_id]["equip"].duplicate() if _gear.has(class_id) else {}
@@ -739,7 +850,10 @@ func fill_all(game: GameData, now: int) -> void:
 		var class_id := int(c["wow_class_id"])
 		ensure_hero(class_id)
 		win_all_zones(class_id)
+		unlock_all_zone_difficulties(class_id)
 		set_items(game.item_ids_for_class(c["id"], class_id), true)
+		set_class_marks(class_id, MAX_CLASS_MARKS)
+		set_item_stars_for(game.item_ids_for_class(c["id"], class_id), MAX_ITEM_STARS)
 		set_talent_xp(class_id, maxi(talent_xp(class_id), FULL_TALENT_XP))
 		for spell: String in c["spell_pool"]:
 			set_seen_rarity("legendary:" + spell, MAX_RARITY)
@@ -926,6 +1040,19 @@ func _read_lists(records: Array[PackedStringArray]) -> void:
 	for r in records:
 		if r.size() < 2:
 			continue
+		if CURRENT_PASSTHROUGH_KINDS.has(r[0]):
+			_preserved_lines.append("|".join(r))
+			if r[0] == "marks" and r.size() == 3:
+				var class_id := _uint(r[1], _U8)
+				var amount := _uint(r[2], _U32)
+				if CLASSES.has(class_id) and amount >= 0:
+					_class_marks.erase(class_id)
+					_class_marks[class_id] = amount
+			elif r[0] == "stars" and r.size() == 2:
+				for pair: Array in _pairs(r[1], ":", _U32, _U8):
+					if pair[1] > 0:
+						_item_stars[pair[0]] = mini(pair[1], MAX_ITEM_STARS)
+			continue
 		var rest := "|".join(r.slice(1))
 		match r[0]:
 			"items":
@@ -953,6 +1080,21 @@ func _read_lists(records: Array[PackedStringArray]) -> void:
 						var entry := [class_id, _zones.find(zone)]
 						if entry[1] >= 0 and not _beaten.has(entry):
 							_beaten.append(entry)
+			"hbeat":  # hbeat|class|zone:tier,…; duplicates keep the highest tier, clamped to V
+				var class_id := _uint(r[1], _U8)
+				if r.size() == 3 and CLASSES.has(class_id):
+					for pair: Array in _pairs(r[2], ":", -1, _U8):
+						var zone_index := _zones.find(pair[0])
+						if zone_index < 0 or pair[1] == 0:
+							continue
+						var found := false
+						for entry: Array in _heroic_beaten:
+							if entry[0] == class_id and entry[1] == zone_index:
+								entry[2] = maxi(entry[2], mini(pair[1], MAX_HEROIC_LEVEL))
+								found = true
+								break
+						if not found:
+							_heroic_beaten.append([class_id, zone_index, mini(pair[1], MAX_HEROIC_LEVEL)])
 			"perk":
 				perk_pairs.append_array(_pairs(rest, ":", -1, _U8))
 			"resets":
@@ -969,6 +1111,7 @@ func _read_lists(records: Array[PackedStringArray]) -> void:
 		_seen.append([id, seen[id]])
 	_achievements.sort()
 	_beaten.sort()
+	_heroic_beaten.sort()
 	_open_after_beaten()
 	dated.sort()
 	for pair: Array in dated:  # a key twice keeps its earliest time
@@ -978,6 +1121,47 @@ func _read_lists(records: Array[PackedStringArray]) -> void:
 	for pair: Array in perk_pairs:  # a perk twice keeps its lowest rank
 		if not _perks.has(pair[0]):
 			_perks[pair[0]] = pair[1]
+
+
+## Keeps untouched modern records byte-for-byte. Once marks or stars are edited, replaces all records of that kind
+## at their first old position (or appends them if the save had none).
+func _append_current_records(out: PackedStringArray) -> void:
+	var wrote_marks := false
+	var wrote_stars := false
+	for line in _preserved_lines:
+		var kind := line.get_slice("|", 0)
+		if kind == "marks" and _marks_modified:
+			if not wrote_marks:
+				_append_marks(out)
+				wrote_marks = true
+			continue
+		if kind == "stars" and _stars_modified:
+			if not wrote_stars:
+				_append_stars(out)
+				wrote_stars = true
+			continue
+		out.append(line)
+	if _marks_modified and not wrote_marks:
+		_append_marks(out)
+	if _stars_modified and not wrote_stars:
+		_append_stars(out)
+
+
+func _append_marks(out: PackedStringArray) -> void:
+	for class_id: int in CLASSES:
+		if _class_marks.get(class_id, 0) > 0:
+			out.append("marks|%d|%d" % [class_id, _class_marks[class_id]])
+
+
+func _append_stars(out: PackedStringArray) -> void:
+	var ids := _item_stars.keys()
+	ids.sort()
+	var pairs := []
+	for id: int in ids:
+		if _item_stars[id] > 0:
+			pairs.append([id, _item_stars[id]])
+	if not pairs.is_empty():
+		out.append("stars|" + _join_pairs(pairs, ":"))
 
 
 # ---------------------------------------------------------------- helpers

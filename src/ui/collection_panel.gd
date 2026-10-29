@@ -10,12 +10,19 @@ var _grid_box: VBoxContainer
 func build() -> void:
 	var p := session.progress
 	var all_items := PackedInt32Array()
+	var class_ids: Array[int] = []
 	for c in session.game.classes:
-		all_items.append_array(session.game.item_ids_for_class(c["id"], int(c["wow_class_id"])))
+		var class_id := int(c["wow_class_id"])
+		class_ids.append(class_id)
+		all_items.append_array(session.game.item_ids_for_class(c["id"], class_id))
 	var all_bar := HBoxContainer.new()
 	all_bar.add_child(_label("All classes:"))
 	all_bar.add_child(_button("Collect all", func() -> void: _apply_bulk(func() -> void: p.set_items(all_items, true))))
 	all_bar.add_child(_button("Clear all", func() -> void: _apply_bulk(func() -> void: p.set_items(all_items, false))))
+	all_bar.add_child(_button("Maximum marks", func() -> void: _apply_bulk(func() -> void:
+		p.set_all_class_marks(class_ids))))
+	all_bar.add_child(_button("5-star all equipment", func() -> void: _apply_bulk(func() -> void:
+		p.set_item_stars_for(all_items, SaveProgress.MAX_ITEM_STARS))))
 	content.add_child(all_bar)
 
 	var picker := _class_picker(_show_class)
@@ -38,7 +45,17 @@ func _show_class(c: Dictionary) -> void:
 	buttons.add_child(_label("This class:"))
 	buttons.add_child(_button("Collect all", func() -> void: _apply_bulk(func() -> void: p.set_items(items, true))))
 	buttons.add_child(_button("Clear all", func() -> void: _apply_bulk(func() -> void: p.set_items(items, false))))
+	buttons.add_child(_button("5-star equipment", func() -> void: _apply_bulk(func() -> void:
+		p.set_item_stars_for(items, SaveProgress.MAX_ITEM_STARS))))
 	_grid_box.add_child(buttons)
+
+	var marks := HBoxContainer.new()
+	marks.add_child(_label("Marks:"))
+	marks.add_child(_spin(p.class_marks(class_id), SaveProgress.MAX_CLASS_MARKS,
+			func(v: int) -> void: p.set_class_marks(class_id, v), 170))
+	marks.add_child(_button("Maximum", func() -> void: _apply_bulk(func() -> void:
+		p.set_class_marks(class_id, SaveProgress.MAX_CLASS_MARKS))))
+	_grid_box.add_child(marks)
 
 	var grid := GridContainer.new()
 	grid.columns = GameData.GEAR_TIERS
